@@ -53,7 +53,7 @@ def test_generate_problems_different_tables(table):
 def test_practice_table_success(monkeypatch, tmp_path):
     """
     Simulates a perfect run on the 2× table:
-    - All 20 answers correct
+    - 18 answers correct
     - Elapsed time under 60 seconds
     Should record a success in results.json
     """

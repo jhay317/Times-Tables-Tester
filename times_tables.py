@@ -89,7 +89,7 @@ def practice_table(times_table: int) -> None:
             if int(answer) == a * b:
                 correct_answers += 1
             else:
-                print("❌ Wrong!")
+                print(f"❌ Wrong! The correct answer is {a * b}")
         except ValueError:
             print("❌ Not a number!")
 
@@ -103,7 +103,7 @@ def practice_table(times_table: int) -> None:
 
     results[key]["attempts"] += 1
 
-    if correct_answers == 20 and elapsed <= 60:
+    if correct_answers >= 18 and elapsed <= 60:
         print(f"🎉 Success! You finished in {elapsed} seconds.")
         results[key]["successes"] += 1
 
@@ -114,7 +114,7 @@ def practice_table(times_table: int) -> None:
             print(f"⭐ Your best time is still {results[key]['best_time']} seconds.")
     else:
         print(f"⏱ Finished in {elapsed} seconds with {correct_answers}/20 correct.")
-        print("⚠️ Goal not reached (20 correct within 60 seconds).")
+        print("⚠️ Goal not reached (18 correct within 60 seconds).")
         results[key]["failures"] += 1
 
     save_results(results)
