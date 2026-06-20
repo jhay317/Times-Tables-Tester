@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Galaxy Explorer - Multiplication & Division Practice</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Background Space Elements -->
+        <div class="stars-container">
+            <div class="star star-1"></div>
+            <div class="star star-2"></div>
+            <div class="star star-3"></div>
+            <div class="nebula"></div>
+        </div>
+
+        <!-- Audio Control Toggle -->
+        <button id="audio-toggle" class="icon-btn" title="Toggle Sound">
+            <span class="sound-icon">🔊</span>
+        </button>
+
+        <!-- SCREEN 1: LANDING & SETUP -->
+        <section id="setup-screen" class="app-screen active">
+            <header class="app-header">
+                <div class="logo-wrapper">
+                    <span class="spaceship-emoji">🚀</span>
+                    <h1>MATH GALAXY<br><span class="subtitle">EXPLORER</span></h1>
+                </div>
+                <p class="tagline">Become a multiplication and division master!</p>
+            </header>
+
+            <div class="setup-card glass-panel">
+                <!-- Mode Selector -->
+                <div class="setup-section">
+                    <h3>1. CHOOSE YOUR MISSION MODE</h3>
+                    <div class="mode-selector">
+                        <button id="mode-multiplication" class="mode-btn active" data-mode="multiplication">
+                            <span class="mode-icon">✖</span>
+                            <span class="mode-label">Multiplication</span>
+                        </button>
+                        <button id="mode-division" class="mode-btn" data-mode="division">
+                            <span class="mode-icon">➗</span>
+                            <span class="mode-label">Division</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Avatar Selector -->
+                <div class="setup-section">
+                    <h3>2. SELECT YOUR CO-PILOT</h3>
+                    <div class="avatar-grid">
+                        <div class="avatar-option active" data-avatar="dog">
+                            <div class="avatar-visual">🐶</div>
+                            <span class="avatar-name">Cosmo</span>
+                            <span class="avatar-desc">The Astro Dog</span>
+                        </div>
+                        <div class="avatar-option" data-avatar="cat">
+                            <div class="avatar-visual">🐱</div>
+                            <span class="avatar-name">Nova</span>
+                            <span class="avatar-desc">The Cosmic Cat</span>
+                        </div>
+                        <div class="avatar-option" data-avatar="robot">
+                            <div class="avatar-visual">🤖</div>
+                            <span class="avatar-name">Pip</span>
+                            <span class="avatar-desc">The Calc Bot</span>
+                        </div>
+                        <div class="avatar-option" data-avatar="fairy">
+                            <div class="avatar-visual">🧚‍♀️</div>
+                            <span class="avatar-name">Stella</span>
+                            <span class="avatar-desc">The Star Pixie</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-start-exploration" class="pulse-button btn-primary">LAUNCH MISSION</button>
+            </div>
+        </section>
+
+        <!-- SCREEN 2: LEVEL / PLANET SELECT -->
+        <section id="map-screen" class="app-screen">
+            <header class="screen-header">
+                <button id="btn-map-back" class="btn-secondary">⬅ MAIN MENU</button>
+                <div class="overall-progress">
+                    <span class="badge">⭐ Total Stars: <span id="total-stars-count">0</span> / 22</span>
+                </div>
+            </header>
+
+            <h2 class="section-title">Select a Planet to Practice</h2>
+            <p class="section-subtitle">Earn Gold Stars for Multiplication and Blue Stars for Division!</p>
+
+            <div class="planet-container">
+                <!-- Planets (2-12) will be generated here dynamically by JS -->
+            </div>
+        </section>
+
+        <!-- SCREEN 3: GAMEPLAY BOARD -->
+        <section id="game-screen" class="app-screen">
+            <!-- HUD -->
+            <header class="game-hud">
+                <button id="btn-game-quit" class="btn-danger-sm">Abort Mission 🛑</button>
+                <div class="game-meta">
+                    <span id="game-mode-badge" class="badge mode-tag">Multiplication</span>
+                    <span id="game-level-badge" class="badge level-tag">Planet 5</span>
+                </div>
+                <div class="hud-stats">
+                    <div class="stat-box">
+                        <span class="stat-label">Progress</span>
+                        <span id="hud-progress" class="stat-val">1 / 20</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Points</span>
+                        <span id="hud-points" class="stat-val text-neon-green">0</span>
+                    </div>
+                    <div class="stat-box" id="streak-box">
+                        <span class="stat-label">Streak</span>
+                        <span id="hud-streak" class="stat-val text-neon-pink">0 🔥</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Gameplay Layout -->
+            <div class="game-layout">
+                <!-- Active Co-Pilot Area -->
+                <div class="copilot-panel glass-panel">
+                    <div id="active-avatar" class="avatar-display animated-idle">🐶</div>
+                    <div id="copilot-bubble" class="speech-bubble">Let's fly, Space Cadet!</div>
+                </div>
+
+                <!-- Interactive Question & Input Card -->
+                <div class="equation-card glass-panel" id="equation-card-el">
+                    <!-- Timer Bar -->
+                    <div class="timer-container">
+                        <div id="timer-bar" class="timer-bar"></div>
+                        <div id="timer-text" class="timer-text">60s</div>
+                    </div>
+
+                    <div class="equation-display">
+                        <span id="number-a">6</span>
+                        <span id="operator">×</span>
+                        <span id="number-b">7</span>
+                        <span id="equals">=</span>
+                        <span class="input-wrapper">
+                            <input type="number" id="user-answer-input" placeholder="?" min="0" max="150" autocomplete="off" autofocus>
+                        </span>
+                    </div>
+
+                    <div class="feedback-indicator" id="answer-feedback-text"></div>
+
+                    <button id="btn-submit-answer" class="btn-primary">SUBMIT ANSWER</button>
+
+                    <!-- Clicky On-Screen Numpad for Touch / Mouse Ease -->
+                    <div class="numpad">
+                        <button class="numpad-btn" data-val="1">1</button>
+                        <button class="numpad-btn" data-val="2">2</button>
+                        <button class="numpad-btn" data-val="3">3</button>
+                        <button class="numpad-btn" data-val="4">4</button>
+                        <button class="numpad-btn" data-val="5">5</button>
+                        <button class="numpad-btn" data-val="6">6</button>
+                        <button class="numpad-btn" data-val="7">7</button>
+                        <button class="numpad-btn" data-val="8">8</button>
+                        <button class="numpad-btn" data-val="9">9</button>
+                        <button class="numpad-btn text-small" data-val="clear">C</button>
+                        <button class="numpad-btn" data-val="0">0</button>
+                        <button class="numpad-btn text-small" data-val="delete">⌫</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 4: SUMMARY & GAME OVER -->
+        <section id="summary-screen" class="app-screen">
+            <div class="summary-wrapper glass-panel">
+                <div class="trophy-wrapper">
+                    <span id="summary-badge-visual" class="trophy-emoji">🏆</span>
+                </div>
+                
+                <h2 id="summary-title" class="summary-title">MISSION COMPLETED!</h2>
+                <p id="summary-subtitle" class="summary-subtitle">Fantastic flight, Space Cadet!</p>
+
+                <div class="summary-stats-grid">
+                    <div class="summary-stat-card">
+                        <span class="label">Correct Answers</span>
+                        <span id="sum-correct" class="value">20 / 20</span>
+                    </div>
+                    <div class="summary-stat-card">
+                        <span class="label">Time Taken</span>
+                        <span id="sum-time" class="value">34.2s</span>
+                    </div>
+                    <div class="summary-stat-card">
+                        <span class="label">Total Score</span>
+                        <span id="sum-points" class="value text-neon-green">2,450</span>
+                    </div>
+                    <div class="summary-stat-card" id="best-time-container">
+                        <span class="label">Best Record</span>
+                        <span id="sum-best" class="value text-neon-pink">New Best! 🚀</span>
+                    </div>
+                </div>
+
+                <div class="reward-box" id="reward-notification">
+                    <!-- Unlocked Badge or encouragement text goes here -->
+                </div>
+
+                <div class="summary-actions">
+                    <button id="btn-replay" class="btn-primary">PLAY PLANET AGAIN</button>
+                    <button id="btn-next-planet" class="btn-success">NEXT PLANET 🪐</button>
+                    <button id="btn-go-map" class="btn-secondary">PLANET MAP</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 5: VISUAL MISTAKE EXPLANATION MODAL -->
+        <div id="explanation-modal" class="modal-overlay">
+            <div class="modal-card glass-panel">
+                <header class="modal-header">
+                    <h2>🔍 Let's Learn!</h2>
+                </header>
+                <div class="modal-content">
+                    <div class="explanation-math">
+                        <span id="explain-equation-text">6 × 4 = 24</span>
+                    </div>
+                    <p id="explain-verbal-text" class="explanation-text">
+                        This means we have 6 groups of 4 stars!
+                    </p>
+                    
+                    <!-- Dynamic Glowing Star Grid Representation -->
+                    <div id="explanation-grid" class="explanation-grid">
+                        <!-- Dynamic columns/rows representing the equation -->
+                    </div>
+                </div>
+                <footer class="modal-footer">
+                    <button id="btn-close-explanation" class="btn-primary">I UNDERSTAND! 🚀</button>
+                </footer>
+            </div>
+        </div>
+
+        <!-- SCREEN 6: CUSTOM CONFIRM MODAL -->
+        <div id="confirm-modal" class="modal-overlay">
+            <div class="modal-card glass-panel" style="max-width: 400px;">
+                <header class="modal-header">
+                    <h2>⚠️ Abort Mission?</h2>
+                </header>
+                <div class="modal-content">
+                    <p class="explanation-text" style="margin-bottom: 25px;">
+                        Are you sure you want to abort this space mission? Your progress for this flight will be lost!
+                    </p>
+                </div>
+                <footer class="modal-footer" style="display: flex; gap: 15px; justify-content: center;">
+                    <button id="btn-confirm-yes" class="btn-primary" style="background: linear-gradient(135deg, var(--color-danger), #b91c1c); box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); flex: 1;">YES, ABORT</button>
+                    <button id="btn-confirm-no" class="btn-secondary" style="flex: 1;">NO, CONTINUE</button>
+                </footer>
+            </div>
+        </div>
+    </div>
+
+    <!-- Particle Canvas for Background Effects -->
+    <canvas id="effects-canvas"></canvas>
+
+    <script src="app.js"></script>
+</body>
+</html>

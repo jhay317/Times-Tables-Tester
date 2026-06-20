@@ -160,7 +160,13 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Output
-Output/*.html
+# Local development results
+results.json
 
-*.json
+# Local Python virtual environments
+env-3-12/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini

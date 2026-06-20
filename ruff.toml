@@ -1,0 +1,18 @@
+# Ruff Configuration File
+# For more info, see https://docs.astral.sh/ruff/
+
+target-version = "py312"
+
+# Enable Pyflakes (F), Pycodestyle (E, W), and Isort (I)
+select = ["E", "F", "W", "I"]
+
+# Never enforce line length violations for comments or strings
+ignore = []
+
+# Industry standard line length
+line-length = 100
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
