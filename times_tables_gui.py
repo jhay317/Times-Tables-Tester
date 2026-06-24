@@ -19,6 +19,13 @@ class TimesTableApp:
         self.entry = tk.Entry(root, font=("Arial", 14), justify="center")
         self.entry.pack(pady=5)
 
+        self.timer_label = tk.Label(root, text="Timer limit in seconds (default 120, min 60, or 0 to disable):", font=("Arial", 11))
+        self.timer_label.pack(pady=5)
+
+        self.timer_entry = tk.Entry(root, font=("Arial", 12), justify="center")
+        self.timer_entry.insert(0, "120")
+        self.timer_entry.pack(pady=5)
+
         self.start_button = tk.Button(root, text="Start Practice", command=self.start_practice, font=("Arial", 14))
         self.start_button.pack(pady=10)
 
@@ -37,6 +44,7 @@ class TimesTableApp:
         self.current_index = 0
         self.start_time = None
         self.correct_answers = 0
+        self.timer_limit = 120
 
     def handle_enter(self, event):
         """Handle Enter key press depending on app state."""
@@ -54,8 +62,23 @@ class TimesTableApp:
             messagebox.showerror("Invalid Input", "Please enter a number between 2 and 12.")
             return
 
-        # Show stats for this table
+        # Check if table is completed
         stats = self.load_stats_for_table(self.table)
+        if stats and stats.get("successes", 0) > 0:
+            messagebox.showinfo("Locked", f"Table {self.table} is already completed and locked! Please choose another table.")
+            return
+
+        # Parse timer limit
+        try:
+            limit_val = int(self.timer_entry.get().strip())
+            if limit_val != 0 and limit_val < 60:
+                raise ValueError
+            self.timer_limit = None if limit_val == 0 else limit_val
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid timer limit of 60 seconds or more (or 0 to disable).")
+            return
+
+        # Show stats for this table
         if stats:
             best_time = stats.get("best_time", None)
             best_text = f"{best_time:.1f}s" if best_time else "N/A"
@@ -84,6 +107,8 @@ class TimesTableApp:
         # Update UI for questions
         self.label.pack_forget()
         self.entry.pack_forget()
+        self.timer_label.pack_forget()
+        self.timer_entry.pack_forget()
         self.start_button.pack_forget()
         self.stats_label.pack_forget()
 
@@ -118,17 +143,18 @@ class TimesTableApp:
 
     def finish_practice(self):
         elapsed = time.time() - self.start_time
-        success = self.correct_answers == 20 and elapsed <= 60
+        success = self.correct_answers == 20 and (self.timer_limit is None or elapsed <= self.timer_limit)
 
         self.save_results(success, elapsed)
 
         if success:
             messagebox.showinfo("Success!", f"🎉 Great job! You finished in {elapsed:.1f} seconds.")
         else:
+            goal_text = f"within {self.timer_limit} seconds" if self.timer_limit else "with no time limit"
             messagebox.showinfo(
                 "Try Again",
                 f"You got {self.correct_answers}/20 correct in {elapsed:.1f} seconds.\n"
-                "Try to get all correct within 60 seconds!"
+                f"Try to get all correct {goal_text}!"
             )
 
         # Reset UI
@@ -138,6 +164,8 @@ class TimesTableApp:
 
         self.label.pack(pady=10)
         self.entry.pack(pady=5)
+        self.timer_label.pack(pady=5)
+        self.timer_entry.pack(pady=5)
         self.start_button.pack(pady=10)
 
     def save_results(self, success, elapsed):

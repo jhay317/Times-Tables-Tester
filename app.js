@@ -10,7 +10,9 @@ let maxStreak = 0;
 let correctAnswers = 0;
 let startTime = null;
 let timerInterval = null;
-let secondsRemaining = 60;
+let secondsRemaining = 120;
+let timerDuration = 120;
+let elapsedSeconds = 0;
 let activeTable = null;
 let soundEnabled = true;
 let audioContext = null;
@@ -350,6 +352,21 @@ function bindEvents() {
         });
     });
 
+    // Timer selections
+    document.querySelectorAll('.timer-btn').forEach(el => {
+        el.addEventListener('click', () => {
+            document.querySelectorAll('.timer-btn').forEach(item => item.classList.remove('active'));
+            el.classList.add('active');
+            const selectedTime = el.dataset.time;
+            if (selectedTime === 'disabled') {
+                timerDuration = null;
+            } else {
+                timerDuration = parseInt(selectedTime);
+            }
+            initAudio();
+        });
+    });
+
     // Audio Toggle button
     audioToggle.addEventListener('click', () => {
         soundEnabled = !soundEnabled;
@@ -369,7 +386,7 @@ function bindEvents() {
 
     // Quit game session
     btnGameQuit.addEventListener('click', () => {
-        if (timerInterval) clearInterval(timerInterval); // Pause game timer
+        pauseTimer();
         document.getElementById('confirm-modal').classList.add('active');
     });
 
@@ -380,18 +397,7 @@ function bindEvents() {
 
     document.getElementById('btn-confirm-no').addEventListener('click', () => {
         document.getElementById('confirm-modal').classList.remove('active');
-        // Resume game timer
-        startTime = Date.now() - (60 - secondsRemaining) * 1000;
-        timerInterval = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            secondsRemaining = Math.max(0, 60 - elapsed);
-            updateTimerUI();
-            
-            if (secondsRemaining <= 0) {
-                clearInterval(timerInterval);
-                endGameSession(false);
-            }
-        }, 100);
+        startTimer();
         userAnswerInput.focus();
     });
 
@@ -430,6 +436,7 @@ function bindEvents() {
         currentProblemIndex++;
         if (currentProblemIndex < activeProblems.length) {
             setupQuestion();
+            startTimer();
         } else {
             endGameSession(true);
         }
@@ -441,8 +448,9 @@ function bindEvents() {
     });
 
     btnNextPlanet.addEventListener('click', () => {
-        if (activeTable < 12) {
-            startPractice(activeTable + 1);
+        const nextTable = getNextUncompletedPlanet(activeTable + 1) || getNextUncompletedPlanet(2);
+        if (nextTable !== null) {
+            startPractice(nextTable);
         } else {
             showScreen(mapScreen);
         }
@@ -558,13 +566,16 @@ function generatePlanetGrid() {
         const multiStats = stats[multiKey] || {};
         const hasMultiStar = (multiStats.successes || 0) > 0;
         const bestMulti = multiStats.best_time;
-        const isMultiPerfect = hasMultiStar && (multiStats.failures === 0 || multiStats.best_time !== null); // simplifies perfect visualization check
 
         // Division stats
         const divKey = `div_${table}`;
         const divStats = stats[divKey] || {};
         const hasDivStar = (divStats.successes || 0) > 0;
         const bestDiv = divStats.best_time;
+
+        // Check completion/locking in current mode
+        const currentModeKey = currentMode === 'multiplication' ? multiKey : divKey;
+        const isModeCompleted = ((stats[currentModeKey] || {}).successes || 0) > 0;
 
         // We can show badges under planet
         const badgesHtml = `
@@ -588,18 +599,26 @@ function generatePlanetGrid() {
             statsLabelText = `✖ ${timeA} | ➗ ${timeB}`;
         }
 
+        const lockOverlayHtml = isModeCompleted ? `<div class="planet-lock-overlay">🔒</div>` : '';
+
         card.innerHTML = `
             <div class="planet-sphere p-${table}">
                 <div class="planet-num">${table}</div>
+                ${lockOverlayHtml}
             </div>
             <div class="planet-name">${PLANET_NAMES[table]}</div>
             ${badgesHtml}
             <div class="planet-stats">${statsLabelText}</div>
         `;
 
-        card.addEventListener('click', () => {
-            startPractice(table);
-        });
+        if (isModeCompleted) {
+            card.classList.add('locked');
+            card.title = `Planet ${table} Completed & Locked`;
+        } else {
+            card.addEventListener('click', () => {
+                startPractice(table);
+            });
+        }
 
         container.appendChild(card);
     }
@@ -648,7 +667,8 @@ function startPractice(table) {
     streak = 0;
     maxStreak = 0;
     correctAnswers = 0;
-    secondsRemaining = 60;
+    elapsedSeconds = 0;
+    secondsRemaining = timerDuration;
     
     // Set up active co-pilot avatar
     const copilotData = AVATARS[selectedAvatar];
@@ -674,34 +694,54 @@ function startPractice(table) {
     showScreen(gameScreen);
     setupQuestion();
     
-    // Timer Loop
-    startTime = Date.now();
-    updateTimerUI();
-    
+    // Start Timer
+    startTimer();
+}
+
+function startTimer() {
+    startTime = Date.now() - elapsedSeconds * 1000;
     if (timerInterval) clearInterval(timerInterval);
     timerInterval = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        secondsRemaining = Math.max(0, 60 - elapsed);
-        updateTimerUI();
+        elapsedSeconds = (Date.now() - startTime) / 1000;
         
-        if (secondsRemaining <= 0) {
-            clearInterval(timerInterval);
-            endGameSession(false);
+        if (timerDuration !== null) {
+            secondsRemaining = Math.max(0, timerDuration - elapsedSeconds);
+            updateTimerUI();
+            
+            if (secondsRemaining <= 0) {
+                pauseTimer();
+                endGameSession(false);
+            }
+        } else {
+            updateTimerUI();
         }
     }, 100);
 }
 
-function updateTimerUI() {
-    const pct = (secondsRemaining / 60) * 100;
-    timerBar.style.width = `${pct}%`;
-    timerText.innerText = `${Math.ceil(secondsRemaining)}s`;
+function pauseTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
 
-    // Handle timer alert styling
-    timerBar.className = 'timer-bar';
-    if (secondsRemaining < 15) {
-        timerBar.classList.add('danger');
-    } else if (secondsRemaining < 30) {
-        timerBar.classList.add('warning');
+function updateTimerUI() {
+    if (timerDuration === null) {
+        timerBar.style.width = '100%';
+        timerText.innerText = `${Math.floor(elapsedSeconds)}s`;
+        timerBar.className = 'timer-bar';
+    } else {
+        const pct = (secondsRemaining / timerDuration) * 100;
+        timerBar.style.width = `${pct}%`;
+        timerText.innerText = `${Math.ceil(secondsRemaining)}s`;
+
+        // Handle timer alert styling
+        timerBar.className = 'timer-bar';
+        if (secondsRemaining < timerDuration * 0.25) {
+            timerBar.classList.add('danger');
+        } else if (secondsRemaining < timerDuration * 0.5) {
+            timerBar.classList.add('warning');
+        }
     }
 }
 
@@ -889,17 +929,29 @@ function showMistakeExplanation(problem) {
     explanationModal.classList.add('active');
 }
 
+// --- Helper to find next uncompleted planet ---
+function getNextUncompletedPlanet(startTable) {
+    for (let t = startTable; t <= 12; t++) {
+        const key = currentMode === 'multiplication' ? String(t) : `div_${t}`;
+        const isCompleted = ((stats[key] || {}).successes || 0) > 0;
+        if (!isCompleted) {
+            return t;
+        }
+    }
+    return null;
+}
+
 // --- End Session (Victory/Game Over) ---
 async function endGameSession(completedAllQuestions = true, aborted = false) {
-    if (timerInterval) clearInterval(timerInterval);
+    pauseTimer();
     
     if (aborted) {
         showScreen(mapScreen);
         return;
     }
 
-    const elapsed = 60 - secondsRemaining;
-    const isSuccess = completedAllQuestions && correctAnswers >= 18 && elapsed <= 60;
+    const elapsed = elapsedSeconds;
+    const isSuccess = completedAllQuestions && correctAnswers >= 18 && (timerDuration === null || elapsed <= timerDuration);
     
     // Play end sound
     if (isSuccess) {
@@ -943,10 +995,22 @@ async function endGameSession(completedAllQuestions = true, aborted = false) {
             rewardNotification.innerText = `🪐 Planet explored! You maintained your star for this level!`;
         }
         bestTimeContainer.style.display = 'flex';
-        btnNextPlanet.style.display = activeTable < 12 ? 'block' : 'none';
 
         // Write stats to api/local
         await syncGameStats(activeTable, true, elapsed);
+
+        // Hide replay option since it is now locked
+        btnReplay.style.display = 'none';
+
+        // Find the next uncompleted planet (check starting from activeTable+1, then wrap from 2)
+        const nextTable = getNextUncompletedPlanet(activeTable + 1) || getNextUncompletedPlanet(2);
+        if (nextTable !== null) {
+            btnNextPlanet.style.display = 'block';
+            btnNextPlanet.innerText = `NEXT PLANET (${PLANET_NAMES[nextTable]}) 🪐`;
+        } else {
+            btnNextPlanet.style.display = 'none';
+            rewardNotification.innerText += `\n🌌 CONGRATULATIONS! You have completed all levels in this mode!`;
+        }
     } else {
         summaryTitle.innerText = "MISSION ABORTED ⏱️";
         summaryTitle.style.color = 'var(--color-danger)';
@@ -954,7 +1018,14 @@ async function endGameSession(completedAllQuestions = true, aborted = false) {
         summarySubtitle.innerText = "We didn't reach the target destination. Let's practice and re-launch!";
         
         bestTimeContainer.style.display = 'none';
-        rewardNotification.innerText = `⚠️ Goal: Get at least 18 correct answers in 60 seconds (Got ${correctAnswers} in ${elapsed.toFixed(1)}s).`;
+        
+        const goalText = timerDuration !== null 
+            ? `Get at least 18 correct answers in ${timerDuration} seconds`
+            : `Get at least 18 correct answers`;
+        rewardNotification.innerText = `⚠️ Goal: ${goalText} (Got ${correctAnswers} in ${elapsed.toFixed(1)}s).`;
+        
+        // Show replay option to let them try again
+        btnReplay.style.display = 'block';
         btnNextPlanet.style.display = 'none';
 
         // Write fail attempts to API

@@ -14,6 +14,7 @@ A fully interactive, premium retro-space-themed web game:
 - **Mission Modes**: Practice both **Multiplication** (✖) and **Division** (➗).
 - **Co-Pilots (Avatars)**: Select a partner (Cosmo the Astro Dog, Nova the Cosmic Cat, Pip the Calc Bot, or Stella the Star Pixie) who reacts and encourages you during gameplay.
 - **Progressive Maps**: Fly through a system of planets representing times tables from **2 through 12**.
+- **Configurable Timer & Level Locking**: Choose a mission time limit (60s, 90s, 120s, 180s, or disable the timer). Once a level is completed, it is locked (🔒) to encourage mastering the other levels.
 - **Engagement Mechanics**: Score multipliers, high score logging, sound toggles, and hot streaks with fire animations!
 - **Interactive Mistakes Visualizer**: When a student gets an answer wrong, a modal appears displaying a grid of stars representing the multiplication grouping (e.g., $6 \times 4$ shows 6 rows of 4 stars) to help them understand the mathematical grouping visually.
 - **Touch-Friendly Numpad**: On-screen numpad support for easy practice on tablets and mobile devices.
@@ -22,12 +23,14 @@ A fully interactive, premium retro-space-themed web game:
 A fast, simple Tkinter desktop app:
 - Solicits practice levels from 2 to 12.
 - Presents 20 timed questions per session.
+- **Customizable Timer & Level Locking**: Allows configuring a custom timer limit (60s or more, or 0 to disable) and locks completed tables.
 - Displays immediate statistics and records loaded from your local storage.
 
 ### 3. Command Line Interface (`times_tables.py`)
 A keyboard-driven terminal version:
 - Best for quick developer testing or fast keyboard-based practice.
 - Provides interactive menus to practice or inspect statistical tables directly in the terminal.
+- **Interactive Timer Settings & Table Locking**: Allows users to configure/disable the practice timer and prevents re-playing completed levels.
 
 ---
 

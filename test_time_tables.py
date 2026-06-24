@@ -147,3 +147,71 @@ def test_practice_table_failure(monkeypatch, tmp_path):
     assert stats["successes"] == 0
     assert stats["failures"] == 1
     assert stats["best_time"] is None
+
+
+def test_practice_table_custom_timer_limit_success(monkeypatch, tmp_path):
+    """
+    Simulates a perfect run on the 4× table with a custom limit of 70s:
+    - 20 answers correct
+    - Elapsed time 65 seconds (under 70s)
+    Should record a success in results.json
+    """
+    test_file = tmp_path / "results.json"
+    monkeypatch.setattr(tt, "RESULTS_FILE", str(test_file))
+
+    problems = generate_problems(4)
+    monkeypatch.setattr(tt, "generate_problems", lambda _: problems)
+
+    answers = [str(a * b) for a, b in problems]
+    answers_iter = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda _: next(answers_iter))
+
+    state = {"called": 0}
+    def fake_time():
+        if state["called"] == 0:
+            state["called"] += 1
+            return 1000.0  # start
+        return 1065.0  # elapsed = 65s
+
+    monkeypatch.setattr("time.time", fake_time)
+
+    practice_table(4, timer_limit=70)
+
+    with open(test_file, "r") as f:
+        results = json.load(f)
+
+    assert results["4"]["successes"] == 1
+
+
+def test_practice_table_disabled_timer_success(monkeypatch, tmp_path):
+    """
+    Simulates a run with timer disabled:
+    - 20 answers correct
+    - Elapsed time is very long (e.g. 150 seconds)
+    Should still record a success in results.json because timer is disabled
+    """
+    test_file = tmp_path / "results.json"
+    monkeypatch.setattr(tt, "RESULTS_FILE", str(test_file))
+
+    problems = generate_problems(5)
+    monkeypatch.setattr(tt, "generate_problems", lambda _: problems)
+
+    answers = [str(a * b) for a, b in problems]
+    answers_iter = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda _: next(answers_iter))
+
+    state = {"called": 0}
+    def fake_time():
+        if state["called"] == 0:
+            state["called"] += 1
+            return 1000.0  # start
+        return 1150.0  # elapsed = 150s
+
+    monkeypatch.setattr("time.time", fake_time)
+
+    practice_table(5, timer_limit=None)
+
+    with open(test_file, "r") as f:
+        results = json.load(f)
+
+    assert results["5"]["successes"] == 1

@@ -28,6 +28,7 @@ import os
 from typing import Dict, List, Tuple, Optional
 
 RESULTS_FILE = "results.json"
+TIMER_LIMIT = 120
 
 
 def load_results() -> Dict[str, dict]:
@@ -65,19 +66,24 @@ def generate_problems(times_table: int) -> List[Tuple[int, int]]:
     return problems
 
 
-def practice_table(times_table: int) -> None:
+def practice_table(times_table: int, timer_limit: Optional[int] = 120) -> None:
     """
     Run a practice session for the chosen times table.
 
     - Presents 20 multiplication problems.
     - Times the attempt.
-    - Records success if all answers are correct and finished under 60 seconds.
+    - Records success if all answers are correct and finished under the timer limit.
     - Updates stats in results.json.
 
     Args:
         times_table (int): The multiplication table to practice.
+        timer_limit (Optional[int]): Time limit in seconds (None if disabled).
     """
     print(f"\nPracticing {times_table} times table...")
+    if timer_limit:
+        print(f"Goal: Get at least 18 correct answers within {timer_limit} seconds.")
+    else:
+        print("Goal: Get at least 18 correct answers (No time limit).")
 
     problems = generate_problems(times_table)
     start_time = time.time()
@@ -103,7 +109,9 @@ def practice_table(times_table: int) -> None:
 
     results[key]["attempts"] += 1
 
-    if correct_answers >= 18 and elapsed <= 60:
+    is_success = correct_answers >= 18 and (timer_limit is None or elapsed <= timer_limit)
+
+    if is_success:
         print(f"🎉 Success! You finished in {elapsed} seconds.")
         results[key]["successes"] += 1
 
@@ -114,7 +122,10 @@ def practice_table(times_table: int) -> None:
             print(f"⭐ Your best time is still {results[key]['best_time']} seconds.")
     else:
         print(f"⏱ Finished in {elapsed} seconds with {correct_answers}/20 correct.")
-        print("⚠️ Goal not reached (18 correct within 60 seconds).")
+        if timer_limit:
+            print(f"⚠️ Goal not reached (18 correct within {timer_limit} seconds).")
+        else:
+            print("⚠️ Goal not reached (at least 18 correct required).")
         results[key]["failures"] += 1
 
     save_results(results)
@@ -137,18 +148,26 @@ def show_stats() -> None:
 
 def main() -> None:
     """Main application loop with menu options."""
+    global TIMER_LIMIT
     while True:
         print("\n--- Times Tables Practice ---")
         print("1. Practice")
         print("2. Show Stats")
-        print("3. Quit")
+        timer_status = f"{TIMER_LIMIT}s" if TIMER_LIMIT is not None else "Disabled"
+        print(f"3. Timer Settings (Current: {timer_status})")
+        print("4. Quit")
         choice = input("Choose an option: ")
 
         if choice == "1":
             try:
                 table = int(input("Which times table would you like to practice? (2-12): "))
                 if 2 <= table <= 12:
-                    practice_table(table)
+                    # Check if table is completed
+                    results = load_results()
+                    if str(table) in results and results[str(table)].get("successes", 0) > 0:
+                        print(f"❌ Table {table} is already completed and locked! Please choose another table.")
+                    else:
+                        practice_table(table, TIMER_LIMIT)
                 else:
                     print("Please choose between 2 and 12.")
             except ValueError:
@@ -156,6 +175,26 @@ def main() -> None:
         elif choice == "2":
             show_stats()
         elif choice == "3":
+            print("\n--- Timer Settings ---")
+            print("Enter timer limit in seconds (default 120, min 60), or 0 to disable the timer.")
+            t_choice = input("Timer limit: ").strip()
+            if not t_choice:
+                TIMER_LIMIT = 120
+                print("Timer set to default (120 seconds).")
+            elif t_choice == "0":
+                TIMER_LIMIT = None
+                print("Timer disabled.")
+            else:
+                try:
+                    limit = int(t_choice)
+                    if limit >= 60:
+                        TIMER_LIMIT = limit
+                        print(f"Timer set to {limit} seconds.")
+                    else:
+                        print("Invalid limit! Timer limit must be at least 60 seconds (or 0 to disable). Timer remains unchanged.")
+                except ValueError:
+                    print("Invalid input. Timer remains unchanged.")
+        elif choice == "4":
             print("Goodbye!")
             break
         else:
