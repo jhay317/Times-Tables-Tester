@@ -110,6 +110,43 @@ To package and run the web game inside a lightweight Docker container:
 
 ---
 
+## ⚡ Cloudflare Pages Deployment
+
+This project is fully ready to deploy to **Cloudflare Pages** with Cloudflare Functions handling the `/api/stats` endpoint.
+
+### 1. Local Development with Wrangler
+Preview the web application and Cloudflare Pages Functions locally using Cloudflare Wrangler:
+
+```bash
+npx wrangler pages dev .
+```
+Or using npm:
+```bash
+npm run dev
+```
+
+### 2. Deploy to Cloudflare Pages
+Deploy directly from your command line:
+
+```bash
+npx wrangler pages deploy .
+```
+Or using npm:
+```bash
+npm run deploy
+```
+
+Alternatively, connect your Git repository (GitHub / GitLab) in the [Cloudflare Dashboard](https://dash.cloudflare.com/), select **Cloudflare Pages**, set the build output directory to `/` (or `.`), and leave the build command blank.
+
+### 3. Optional: Persistent Cloud Storage with Workers KV
+By default, player statistics fall back gracefully to `localStorage` in the browser. To persist statistics across devices and users using Cloudflare's global edge network:
+1. Create a KV Namespace in the Cloudflare Dashboard under **Workers & Pages > KV**.
+2. Name the KV namespace (e.g. `STATS_KV`).
+3. Bind the KV namespace to your Pages project in **Settings > Functions > KV namespace bindings** with the Variable name `STATS_KV`.
+4. (Optional) For Wrangler deployments, uncomment the `[[kv_namespaces]]` block in `wrangler.toml` with your KV namespace ID.
+
+---
+
 ## 🧪 Testing & Linting
 
 ### Setup Dependencies

@@ -1,0 +1,21 @@
+{
+  "name": "times-tables-tester",
+  "version": "1.0.0",
+  "description": "Math Galaxy Explorer & Times Tables Practice",
+  "main": "app.js",
+  "scripts": {
+    "dev": "wrangler pages dev .",
+    "deploy": "wrangler pages deploy ."
+  },
+  "keywords": [
+    "math",
+    "times-tables",
+    "cloudflare-pages",
+    "game"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.100.0"
+  }
+}

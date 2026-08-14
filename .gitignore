@@ -169,4 +169,10 @@ env-3-12/
 # OS-specific files
 .DS_Store
 Thumbs.db
-desktop.ini
+desktop.ini
+
+# Cloudflare Pages & Node.js
+.wrangler/
+.dev.vars
+node_modules/
+
