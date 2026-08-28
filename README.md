@@ -12,6 +12,10 @@ An engaging, gamified times tables and division practice ecosystem designed to h
 ### 1. Math Galaxy Explorer (Web App)
 A fully interactive, premium retro-space-themed web game:
 - **Mission Modes**: Practice both **Multiplication** (✖) and **Division** (➗).
+- **5 Mins/Day & 5 Days/Week Rewards Hub**: Designed to build a consistent habit for kids! Tracks daily active practice minutes (5 min target) and 5-day weekly milestones.
+- **Skylight Calendar Claim Card**: Completing 5 days of practice generates an official claim code (e.g., `SKYLIGHT-STARS-8492`) for kids to present to parents to redeem Skylight Calendar chore bonus stars or family rewards!
+- **In-Game Star Shop & Avatars**: Earn Bonus Stars to unlock space helmets, star crowns, laser visors, and animated particle trails (Rainbow & Fireball FX).
+- **Parent Verification Zone**: PIN-protected setup to configure custom rewards (e.g. "5 Skylight Calendar Bonus Stars", "30 Mins Extra Screen Time") and view detailed daily practice logs.
 - **Co-Pilots (Avatars)**: Select a partner (Cosmo the Astro Dog, Nova the Cosmic Cat, Pip the Calc Bot, or Stella the Star Pixie) who reacts and encourages you during gameplay.
 - **Progressive Maps**: Fly through a system of planets representing times tables from **2 through 12**.
 - **Configurable Timer & Level Locking**: Choose a mission time limit (60s, 90s, 120s, 180s, or disable the timer). Once a level is completed, it is locked (🔒) to encourage mastering the other levels.

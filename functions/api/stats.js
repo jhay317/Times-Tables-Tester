@@ -57,6 +57,46 @@ export async function onRequestPost(context) {
 
     // Merge incoming stats with existing stats
     for (const [tableKey, newStats] of Object.entries(newData || {})) {
+      if (tableKey === 'rewards_data') {
+        if (!existingData.rewards_data) existingData.rewards_data = {};
+        const rew = existingData.rewards_data;
+
+        if (newStats.bonus_stars !== undefined) {
+          rew.bonus_stars = Math.max(rew.bonus_stars || 0, newStats.bonus_stars || 0);
+        }
+
+        if (newStats.daily_logs && typeof newStats.daily_logs === 'object') {
+          if (!rew.daily_logs) rew.daily_logs = {};
+          for (const [dateStr, logEntry] of Object.entries(newStats.daily_logs)) {
+            if (!rew.daily_logs[dateStr]) {
+              rew.daily_logs[dateStr] = logEntry;
+            } else {
+              const curr = rew.daily_logs[dateStr];
+              curr.seconds_played = Math.max(curr.seconds_played || 0, logEntry.seconds_played || 0);
+              curr.goal_completed = (curr.goal_completed || false) || (logEntry.goal_completed || false);
+            }
+          }
+        }
+
+        if (Array.isArray(newStats.unlocked_items)) {
+          const itemSet = new Set(rew.unlocked_items || []);
+          newStats.unlocked_items.forEach(item => itemSet.add(item));
+          rew.unlocked_items = Array.from(itemSet);
+        }
+
+        if (newStats.weekly_history && typeof newStats.weekly_history === 'object') {
+          if (!rew.weekly_history) rew.weekly_history = {};
+          Object.assign(rew.weekly_history, newStats.weekly_history);
+        }
+
+        if (newStats.parent_settings && typeof newStats.parent_settings === 'object') {
+          if (!rew.parent_settings) rew.parent_settings = {};
+          Object.assign(rew.parent_settings, newStats.parent_settings);
+        }
+
+        continue;
+      }
+
       if (!existingData[tableKey]) {
         existingData[tableKey] = {
           attempts: 0,
@@ -67,15 +107,17 @@ export async function onRequestPost(context) {
       }
 
       const stats = existingData[tableKey];
-      stats.attempts = (stats.attempts || 0) + (newStats.attempts || 0);
-      stats.successes = (stats.successes || 0) + (newStats.successes || 0);
-      stats.failures = (stats.failures || 0) + (newStats.failures || 0);
+      if (newStats && typeof newStats === 'object') {
+        stats.attempts = (stats.attempts || 0) + (newStats.attempts || 0);
+        stats.successes = (stats.successes || 0) + (newStats.successes || 0);
+        stats.failures = (stats.failures || 0) + (newStats.failures || 0);
 
-      const incomingBest = newStats.best_time;
-      if (incomingBest !== undefined && incomingBest !== null) {
-        const currentBest = stats.best_time;
-        if (currentBest === undefined || currentBest === null || incomingBest < currentBest) {
-          stats.best_time = incomingBest;
+        const incomingBest = newStats.best_time;
+        if (incomingBest !== undefined && incomingBest !== null) {
+          const currentBest = stats.best_time;
+          if (currentBest === undefined || currentBest === null || incomingBest < currentBest) {
+            stats.best_time = incomingBest;
+          }
         }
       }
     }

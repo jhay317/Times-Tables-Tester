@@ -56,6 +56,47 @@ class MathGalaxyHandler(http.server.SimpleHTTPRequestHandler):
                 
                 # Merge incoming stats with existing
                 for table_key, new_stats in new_data.items():
+                    if table_key == "rewards_data":
+                        if "rewards_data" not in existing_data:
+                            existing_data["rewards_data"] = {}
+                        rew = existing_data["rewards_data"]
+                        
+                        # Update bonus_stars
+                        if "bonus_stars" in new_stats:
+                            rew["bonus_stars"] = max(rew.get("bonus_stars", 0), new_stats["bonus_stars"])
+                        
+                        # Merge daily logs
+                        if "daily_logs" in new_stats and isinstance(new_stats["daily_logs"], dict):
+                            if "daily_logs" not in rew:
+                                rew["daily_logs"] = {}
+                            for date_str, log_entry in new_stats["daily_logs"].items():
+                                if date_str not in rew["daily_logs"]:
+                                    rew["daily_logs"][date_str] = log_entry
+                                else:
+                                    curr = rew["daily_logs"][date_str]
+                                    curr["seconds_played"] = max(curr.get("seconds_played", 0), log_entry.get("seconds_played", 0))
+                                    curr["goal_completed"] = curr.get("goal_completed", False) or log_entry.get("goal_completed", False)
+                        
+                        # Merge unlocked items
+                        if "unlocked_items" in new_stats and isinstance(new_stats["unlocked_items"], list):
+                            existing_items = set(rew.get("unlocked_items", []))
+                            existing_items.update(new_stats["unlocked_items"])
+                            rew["unlocked_items"] = list(existing_items)
+
+                        # Merge weekly history
+                        if "weekly_history" in new_stats and isinstance(new_stats["weekly_history"], dict):
+                            if "weekly_history" not in rew:
+                                rew["weekly_history"] = {}
+                            rew["weekly_history"].update(new_stats["weekly_history"])
+                        
+                        # Parent settings
+                        if "parent_settings" in new_stats and isinstance(new_stats["parent_settings"], dict):
+                            if "parent_settings" not in rew:
+                                rew["parent_settings"] = {}
+                            rew["parent_settings"].update(new_stats["parent_settings"])
+
+                        continue
+
                     if table_key not in existing_data:
                         existing_data[table_key] = {
                             "attempts": 0,
@@ -65,16 +106,17 @@ class MathGalaxyHandler(http.server.SimpleHTTPRequestHandler):
                         }
                     
                     stats = existing_data[table_key]
-                    stats["attempts"] += new_stats.get("attempts", 0)
-                    stats["successes"] += new_stats.get("successes", 0)
-                    stats["failures"] += new_stats.get("failures", 0)
-                    
-                    # Update best time if a new best time is provided
-                    incoming_best = new_stats.get("best_time")
-                    if incoming_best is not None:
-                        current_best = stats.get("best_time")
-                        if current_best is None or incoming_best < current_best:
-                            stats["best_time"] = incoming_best
+                    if isinstance(new_stats, dict):
+                        stats["attempts"] += new_stats.get("attempts", 0)
+                        stats["successes"] += new_stats.get("successes", 0)
+                        stats["failures"] += new_stats.get("failures", 0)
+                        
+                        # Update best time if a new best time is provided
+                        incoming_best = new_stats.get("best_time")
+                        if incoming_best is not None:
+                            current_best = stats.get("best_time")
+                            if current_best is None or incoming_best < current_best:
+                                stats["best_time"] = incoming_best
                 
                 # Save merged stats
                 with open(results_path, 'w', encoding='utf-8') as f:

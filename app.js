@@ -17,6 +17,18 @@ let activeTable = null;
 let soundEnabled = true;
 let audioContext = null;
 
+// Rewards System State
+let rewardsData = {
+    bonus_stars: 0,
+    unlocked_items: [],
+    equipped_items: { hat: null, trail: null },
+    daily_logs: {}, // 'YYYY-MM-DD' -> { seconds_played: 0, goal_completed: false }
+    weekly_history: {},
+    parent_settings: { pin: "1234", custom_reward: "5 Skylight Calendar Bonus Stars" }
+};
+let dailyTimerInterval = null;
+let isParentUnlocked = false;
+
 // Avatars configuration
 const AVATARS = {
     dog: {
@@ -459,6 +471,8 @@ function bindEvents() {
     btnGoMap.addEventListener('click', () => {
         showScreen(mapScreen);
     });
+
+    bindRewardsEvents();
 }
 
 function showScreen(screen) {
@@ -471,16 +485,29 @@ async function fetchStats() {
     try {
         const res = await fetch('/api/stats');
         if (res.ok) {
-            stats = await res.json();
+            const data = await res.json();
+            stats = data;
+            if (data.rewards_data) {
+                rewardsData = mergeRewardsData(rewardsData, data.rewards_data);
+            }
         } else {
             throw new Error();
         }
     } catch (e) {
         console.warn("Could not load statistics from server API, falling back to LocalStorage.");
         const fallback = localStorage.getItem('math_galaxy_stats');
-        stats = fallback ? JSON.parse(fallback) : {};
+        if (fallback) {
+            try {
+                const parsed = JSON.parse(fallback);
+                stats = parsed;
+                if (parsed.rewards_data) {
+                    rewardsData = mergeRewardsData(rewardsData, parsed.rewards_data);
+                }
+            } catch(err) {}
+        }
     }
     updateOverallStats();
+    updateRewardsUI();
 }
 
 async function syncGameStats(table, success, elapsed) {
@@ -716,6 +743,9 @@ function startTimer() {
             updateTimerUI();
         }
     }, 100);
+
+    // Start Daily Goal 5-minute Practice Counter
+    startDailyPracticeCounter();
 }
 
 function pauseTimer() {
@@ -723,6 +753,7 @@ function pauseTimer() {
         clearInterval(timerInterval);
         timerInterval = null;
     }
+    stopDailyPracticeCounter();
 }
 
 function updateTimerUI() {
@@ -1033,6 +1064,507 @@ async function endGameSession(completedAllQuestions = true, aborted = false) {
     }
 
     showScreen(summaryScreen);
+}
+
+// ==========================================================================
+// REWARDS & WEEKLY MISSION HUB ENGINE
+// ==========================================================================
+
+const SHOP_ITEMS = [
+    { id: 'helmet_dog', name: "Astro Helmet (Cosmo)", type: 'hat', avatar: 'dog', cost: 2, icon: '🪖', desc: 'Sleek space helmet' },
+    { id: 'goggles_dog', name: "Laser Visor (Cosmo)", type: 'hat', avatar: 'dog', cost: 5, icon: '🥽', desc: 'Tactical laser optics' },
+    { id: 'crown_cat', name: "Cosmic Crown (Nova)", type: 'hat', avatar: 'cat', cost: 2, icon: '👑', desc: 'Glowing star crown' },
+    { id: 'wings_cat', name: "Star Wings (Nova)", type: 'hat', avatar: 'cat', cost: 5, icon: '🪽', desc: 'Shimmering nebular wings' },
+    { id: 'antenna_robot', name: "Neon Antenna (Pip)", type: 'hat', avatar: 'robot', cost: 2, icon: '📡', desc: 'Comm signal rod' },
+    { id: 'visor_robot', name: "Quantum Visor (Pip)", type: 'hat', avatar: 'robot', cost: 5, icon: '🕶️', desc: 'Math calculation optics' },
+    { id: 'wand_fairy', name: "Sparkle Wand (Stella)", type: 'hat', avatar: 'fairy', cost: 2, icon: '🪄', desc: 'Enchanted star wand' },
+    { id: 'halo_fairy', name: "Galaxy Halo (Stella)", type: 'hat', avatar: 'fairy', cost: 5, icon: '😇', desc: 'Floating celestial halo' },
+    { id: 'trail_rainbow', name: "Rainbow Trail FX", type: 'trail', avatar: 'all', cost: 8, icon: '🌈', desc: 'Rainbow sparkles on solves' },
+    { id: 'trail_fire', name: "Fireball Trail FX", type: 'trail', avatar: 'all', cost: 10, icon: '🔥', desc: 'Cosmic blaze solve effect' }
+];
+
+function mergeRewardsData(target, incoming) {
+    if (!incoming) return target;
+    const res = Object.assign({}, target, incoming);
+    if (incoming.bonus_stars !== undefined) {
+        res.bonus_stars = Math.max(target.bonus_stars || 0, incoming.bonus_stars || 0);
+    }
+    if (incoming.daily_logs) {
+        res.daily_logs = Object.assign({}, target.daily_logs || {}, incoming.daily_logs);
+    }
+    if (incoming.unlocked_items) {
+        const itemSet = new Set([...(target.unlocked_items || []), ...(incoming.unlocked_items || [])]);
+        res.unlocked_items = Array.from(itemSet);
+    }
+    if (incoming.weekly_history) {
+        res.weekly_history = Object.assign({}, target.weekly_history || {}, incoming.weekly_history);
+    }
+    if (incoming.parent_settings) {
+        res.parent_settings = Object.assign({}, target.parent_settings || {}, incoming.parent_settings);
+    }
+    if (incoming.equipped_items) {
+        res.equipped_items = Object.assign({}, target.equipped_items || {}, incoming.equipped_items);
+    }
+    return res;
+}
+
+function getTodayDateStr() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatSeconds(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+}
+
+function getWeekKey() {
+    const d = new Date();
+    const startOfYear = new Date(d.getFullYear(), 0, 1);
+    const pastDaysOfYear = (d - startOfYear) / 86400000;
+    const weekNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${weekNum}`;
+}
+
+function getCurrentWeekDays() {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const distanceToMon = (dayOfWeek + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - distanceToMon);
+    
+    const weekDays = [];
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const todayStr = getTodayDateStr();
+
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        weekDays.push({
+            dateStr,
+            dayName: dayNames[i],
+            isToday: dateStr === todayStr
+        });
+    }
+    return weekDays;
+}
+
+// Active Daily Goal Practice Timer Counter (runs during gameplay)
+function startDailyPracticeCounter() {
+    if (dailyTimerInterval) clearInterval(dailyTimerInterval);
+    dailyTimerInterval = setInterval(() => {
+        const todayKey = getTodayDateStr();
+        if (!rewardsData.daily_logs[todayKey]) {
+            rewardsData.daily_logs[todayKey] = { seconds_played: 0, goal_completed: false };
+        }
+
+        const log = rewardsData.daily_logs[todayKey];
+        log.seconds_played += 1;
+
+        // Update active HUD counter element
+        const hudDailyTime = document.getElementById('hud-daily-time');
+        if (hudDailyTime) {
+            hudDailyTime.innerText = formatSeconds(log.seconds_played);
+        }
+
+        // Check 5-minute threshold (300 seconds)
+        if (log.seconds_played >= 300 && !log.goal_completed) {
+            log.goal_completed = true;
+            rewardsData.bonus_stars += 1;
+            playSound('victory');
+            showToast("🎉 DAILY GOAL COMPLETED! You earned 1 Bonus Star!", "🌟");
+            checkWeeklyCompletion();
+            saveRewardsData();
+        } else if (log.seconds_played % 10 === 0) {
+            saveRewardsData();
+        }
+        updateRewardsUI();
+    }, 1000);
+}
+
+function stopDailyPracticeCounter() {
+    if (dailyTimerInterval) {
+        clearInterval(dailyTimerInterval);
+        dailyTimerInterval = null;
+    }
+    saveRewardsData();
+}
+
+function checkWeeklyCompletion() {
+    const weekDays = getCurrentWeekDays();
+    let completedDaysCount = 0;
+    weekDays.forEach(w => {
+        const log = rewardsData.daily_logs[w.dateStr];
+        if (log && log.goal_completed) {
+            completedDaysCount++;
+        }
+    });
+
+    const weekKey = getWeekKey();
+    if (!rewardsData.weekly_history[weekKey]) {
+        rewardsData.weekly_history[weekKey] = { claim_code: null, goal_met: false };
+    }
+
+    const weekRecord = rewardsData.weekly_history[weekKey];
+    if (completedDaysCount >= 5 && !weekRecord.goal_met) {
+        weekRecord.goal_met = true;
+        const codeNum = Math.floor(1000 + Math.random() * 9000);
+        weekRecord.claim_code = `SKYLIGHT-STARS-${codeNum}`;
+        rewardsData.bonus_stars += 5;
+        playSound('victory');
+        showToast(`🏆 WEEKLY MISSION COMPLETE! Claim Card Generated for 5 Skylight Bonus Stars: ${weekRecord.claim_code}`, "🚀");
+    }
+}
+
+async function saveRewardsData() {
+    stats.rewards_data = rewardsData;
+    localStorage.setItem('math_galaxy_stats', JSON.stringify(stats));
+
+    try {
+        await fetch('/api/stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rewards_data: rewardsData })
+        });
+    } catch (e) {
+        console.error("Failed to post rewards_data to API.", e);
+    }
+    updateRewardsUI();
+}
+
+function showToast(message, icon = '🌟') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.innerHTML = `<span style="font-size: 1.4rem;">${icon}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = 'all 0.4s ease';
+        setTimeout(() => toast.remove(), 400);
+    }, 4000);
+}
+
+function updateRewardsUI() {
+    const todayKey = getTodayDateStr();
+    const todayLog = rewardsData.daily_logs[todayKey] || { seconds_played: 0, goal_completed: false };
+    const seconds = todayLog.seconds_played;
+    const isCompleted = todayLog.goal_completed;
+
+    // Header Widget
+    const widgetTodayStatus = document.getElementById('widget-today-status');
+    const widgetStarCount = document.getElementById('widget-star-count');
+    if (widgetStarCount) widgetStarCount.innerText = `🪙 ${rewardsData.bonus_stars}`;
+    if (widgetTodayStatus) {
+        widgetTodayStatus.innerText = isCompleted ? `5m Complete! ⭐` : `${Math.floor(seconds / 60)}/5m`;
+        widgetTodayStatus.style.borderColor = isCompleted ? 'var(--color-success)' : 'var(--color-accent-cyan)';
+    }
+
+    // Game HUD
+    const hudDailyTime = document.getElementById('hud-daily-time');
+    if (hudDailyTime) {
+        hudDailyTime.innerText = formatSeconds(seconds);
+    }
+
+    // Modal Tab 1: Weekly Progress
+    const rewardsTodayTime = document.getElementById('rewards-today-time');
+    const rewardsTodayBadge = document.getElementById('rewards-today-badge');
+    const rewardsTodayBar = document.getElementById('rewards-today-bar');
+
+    if (rewardsTodayTime) rewardsTodayTime.innerText = `${formatSeconds(seconds)} / 5m 00s`;
+    if (rewardsTodayBadge) {
+        rewardsTodayBadge.innerText = isCompleted ? "Goal Met! ⭐" : "In Progress ⏳";
+        rewardsTodayBadge.className = `badge-status ${isCompleted ? 'completed' : 'incomplete'}`;
+    }
+    if (rewardsTodayBar) {
+        const pct = Math.min(100, (seconds / 300) * 100);
+        rewardsTodayBar.style.width = `${pct}%`;
+    }
+
+    // 7-Day Calendar Grid
+    const calendarGrid = document.getElementById('weekly-calendar-grid');
+    if (calendarGrid) {
+        calendarGrid.innerHTML = '';
+        const weekDays = getCurrentWeekDays();
+        let completedCount = 0;
+
+        weekDays.forEach(w => {
+            const log = rewardsData.daily_logs[w.dateStr] || {};
+            const done = log.goal_completed;
+            if (done) completedCount++;
+
+            const pill = document.createElement('div');
+            pill.className = `day-pill ${done ? 'completed' : ''} ${w.isToday ? 'today' : ''}`;
+            pill.innerHTML = `
+                <span class="day-name">${w.dayName}${w.isToday ? ' (Today)' : ''}</span>
+                <span class="day-icon">${done ? '⭐️' : '⚪'}</span>
+                <span class="day-time">${formatSeconds(log.seconds_played || 0)}</span>
+            `;
+            calendarGrid.appendChild(pill);
+        });
+
+        const statusCard = document.getElementById('weekly-mission-status-card');
+        if (statusCard) {
+            if (completedCount >= 5) {
+                statusCard.innerHTML = `
+                    <div style="background: rgba(34,197,94,0.15); border: 1px solid #22c55e; border-radius: 12px; padding: 14px; text-align: center;">
+                        <h4 style="color: #22c55e; margin-bottom: 4px;">🏆 WEEKLY GOAL COMPLETED! (${completedCount}/5 Days)</h4>
+                        <p style="font-size: 0.85rem; color: white;">Your Skylight Chore Claim Card is ready in the next tab!</p>
+                    </div>
+                `;
+            } else {
+                statusCard.innerHTML = `
+                    <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px; text-align: center;">
+                        <h4 style="color: white; margin-bottom: 4px;">Weekly Progress: ${completedCount} / 5 Days Completed</h4>
+                        <p style="font-size: 0.85rem; color: var(--color-text-dim);">Practice 5 minutes on ${5 - completedCount} more day(s) this week to claim your Skylight bonus stars!</p>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // Modal Tab 2: Skylight Claim Card
+    const claimDisplay = document.getElementById('claim-card-display');
+    if (claimDisplay) {
+        const weekKey = getWeekKey();
+        const weekRecord = rewardsData.weekly_history[weekKey] || {};
+        const parentReward = rewardsData.parent_settings.custom_reward || "5 Skylight Calendar Bonus Stars";
+
+        if (weekRecord.goal_met && weekRecord.claim_code) {
+            claimDisplay.className = 'claim-card-box';
+            claimDisplay.innerHTML = `
+                <span style="font-size: 2.2rem;">🏆</span>
+                <h4 style="color: white; font-size: 1.1rem; margin: 0;">OFFICIAL REWARD VERIFICATION</h4>
+                <p style="font-size: 0.85rem; color: var(--color-text-dim);">Reward: <strong>${parentReward}</strong></p>
+                <div class="claim-code-text">${weekRecord.claim_code}</div>
+                <p style="font-size: 0.8rem; color: #38bdf8;">Show this code to your parent to claim your reward on your Skylight Calendar!</p>
+                <button id="btn-copy-claim-code" class="btn-primary-sm">Copy Code 📋</button>
+            `;
+            const copyBtn = document.getElementById('btn-copy-claim-code');
+            if (copyBtn) {
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(weekRecord.claim_code);
+                    showToast("Claim Code copied to clipboard!", "📋");
+                };
+            }
+        } else {
+            claimDisplay.className = 'claim-card-box locked';
+            const weekDays = getCurrentWeekDays();
+            let count = 0;
+            weekDays.forEach(w => {
+                if ((rewardsData.daily_logs[w.dateStr] || {}).goal_completed) count++;
+            });
+            claimDisplay.innerHTML = `
+                <span style="font-size: 2.2rem;">🔒</span>
+                <h4 style="color: var(--color-text-dim); margin: 0;">CLAIM CARD LOCKED</h4>
+                <p style="font-size: 0.85rem; color: var(--color-text-dim);">Complete 5 minutes of practice for 5 days this week to unlock your claim code!</p>
+                <div class="badge-status incomplete">Progress: ${count} / 5 Days</div>
+            `;
+        }
+    }
+
+    // Modal Tab 3: Star Shop
+    const shopStarBalance = document.getElementById('shop-star-balance');
+    if (shopStarBalance) shopStarBalance.innerText = `🪙 ${rewardsData.bonus_stars}`;
+    renderShopItems();
+
+    // Modal Tab 4: Parent Zone Logs
+    renderParentLogs();
+}
+
+function renderShopItems() {
+    const grid = document.getElementById('shop-items-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    SHOP_ITEMS.forEach(item => {
+        const isUnlocked = rewardsData.unlocked_items.includes(item.id);
+        const isEquipped = rewardsData.equipped_items[item.type] === item.id;
+
+        const card = document.createElement('div');
+        card.className = `shop-item-card glass-panel ${isUnlocked ? 'unlocked' : ''}`;
+        card.innerHTML = `
+            <div class="shop-item-icon">${item.icon}</div>
+            <span class="shop-item-name">${item.name}</span>
+            <span class="shop-item-desc">${item.desc}</span>
+            <span class="shop-item-cost">${isUnlocked ? (isEquipped ? 'EQUIPPED ✅' : 'OWNED') : `🪙 ${item.cost}`}</span>
+            <button class="btn-${isUnlocked ? (isEquipped ? 'secondary' : 'primary') : 'success'}-sm">${isUnlocked ? (isEquipped ? 'Unequip' : 'Equip') : 'Unlock'}</button>
+        `;
+        card.querySelector('button').onclick = () => purchaseShopItem(item);
+        grid.appendChild(card);
+    });
+}
+
+function purchaseShopItem(item) {
+    if (rewardsData.unlocked_items.includes(item.id)) {
+        if (item.type === 'hat') {
+            rewardsData.equipped_items.hat = rewardsData.equipped_items.hat === item.id ? null : item.id;
+        } else if (item.type === 'trail') {
+            rewardsData.equipped_items.trail = rewardsData.equipped_items.trail === item.id ? null : item.id;
+        }
+        showToast(`${item.name} ${rewardsData.equipped_items[item.type] === item.id ? 'equipped' : 'unequipped'}!`, item.icon);
+        saveRewardsData();
+        return;
+    }
+
+    if (rewardsData.bonus_stars < item.cost) {
+        playSound('incorrect');
+        showToast(`Need ${item.cost - rewardsData.bonus_stars} more stars to unlock!`, "⚠️");
+        return;
+    }
+
+    rewardsData.bonus_stars -= item.cost;
+    rewardsData.unlocked_items.push(item.id);
+    if (item.type === 'hat') rewardsData.equipped_items.hat = item.id;
+    if (item.type === 'trail') rewardsData.equipped_items.trail = item.id;
+
+    playSound('streak');
+    showToast(`Unlocked ${item.name}!`, "🎉");
+    saveRewardsData();
+}
+
+function renderParentLogs() {
+    const container = document.getElementById('parent-logs-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const sortedDates = Object.keys(rewardsData.daily_logs).sort().reverse();
+    if (sortedDates.length === 0) {
+        container.innerHTML = `<div style="font-size: 0.8rem; color: var(--color-text-dim); text-align: center; padding: 10px;">No practice sessions logged yet.</div>`;
+        return;
+    }
+
+    sortedDates.forEach(dateStr => {
+        const log = rewardsData.daily_logs[dateStr];
+        const row = document.createElement('div');
+        row.className = 'log-row';
+        row.innerHTML = `
+            <span>📅 ${dateStr}</span>
+            <span>⏱️ ${formatSeconds(log.seconds_played || 0)}</span>
+            <span style="color: ${log.goal_completed ? '#22c55e' : '#f59e0b'}; font-weight: bold;">${log.goal_completed ? '✅ 5m Goal Met' : '⏳ In Progress'}</span>
+        `;
+        container.appendChild(row);
+    });
+}
+
+function bindRewardsEvents() {
+    // Open/Close Modal
+    const btnOpen = document.getElementById('btn-open-rewards');
+    const btnClose = document.getElementById('btn-close-rewards');
+    const modal = document.getElementById('rewards-modal');
+
+    if (btnOpen) btnOpen.onclick = () => { updateRewardsUI(); modal.classList.add('active'); };
+    if (btnClose) btnClose.onclick = () => modal.classList.remove('active');
+
+    // Tab switching
+    document.querySelectorAll('.rewards-tab-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.rewards-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.rewards-tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const target = document.getElementById(btn.dataset.tab);
+            if (target) target.classList.add('active');
+        };
+    });
+
+    // Parent PIN Unlock
+    const btnUnlock = document.getElementById('btn-unlock-parent');
+    const pinInput = document.getElementById('parent-pin-input');
+    const pinErr = document.getElementById('pin-error-msg');
+    const parentContent = document.getElementById('parent-controls-content');
+    const parentLock = document.getElementById('parent-pin-lock');
+
+    if (btnUnlock) {
+        btnUnlock.onclick = () => {
+            const entered = pinInput.value.trim();
+            const actualPin = rewardsData.parent_settings.pin || "1234";
+            if (entered === actualPin) {
+                isParentUnlocked = true;
+                pinErr.style.display = 'none';
+                parentLock.style.display = 'none';
+                parentContent.style.display = 'block';
+                const customRewardText = document.getElementById('custom-reward-text');
+                if (customRewardText) customRewardText.value = rewardsData.parent_settings.custom_reward || "5 Skylight Calendar Bonus Stars";
+            } else {
+                pinErr.style.display = 'block';
+                playSound('incorrect');
+            }
+        };
+    }
+
+    // Save Reward Text
+    const btnSaveReward = document.getElementById('btn-save-parent-reward');
+    if (btnSaveReward) {
+        btnSaveReward.onclick = () => {
+            const val = document.getElementById('custom-reward-text').value.trim();
+            if (val) {
+                rewardsData.parent_settings.custom_reward = val;
+                saveRewardsData();
+                showToast("Saved custom reward name!", "⚙️");
+            }
+        };
+    }
+
+    // Save New PIN
+    const btnSavePin = document.getElementById('btn-save-pin');
+    if (btnSavePin) {
+        btnSavePin.onclick = () => {
+            const val = document.getElementById('new-pin-text').value.trim();
+            if (val && val.length === 4) {
+                rewardsData.parent_settings.pin = val;
+                saveRewardsData();
+                showToast("Updated Parent PIN!", "🔒");
+                document.getElementById('new-pin-text').value = '';
+            } else {
+                showToast("PIN must be 4 digits!", "⚠️");
+            }
+        };
+    }
+
+    // Manual Complete Override
+    const btnManualComplete = document.getElementById('btn-parent-manual-complete');
+    if (btnManualComplete) {
+        btnManualComplete.onclick = () => {
+            const todayKey = getTodayDateStr();
+            if (!rewardsData.daily_logs[todayKey]) {
+                rewardsData.daily_logs[todayKey] = { seconds_played: 300, goal_completed: true };
+            } else {
+                rewardsData.daily_logs[todayKey].seconds_played = Math.max(300, rewardsData.daily_logs[todayKey].seconds_played);
+                rewardsData.daily_logs[todayKey].goal_completed = true;
+            }
+            rewardsData.bonus_stars += 1;
+            checkWeeklyCompletion();
+            saveRewardsData();
+            showToast("Marked today's practice goal as completed!", "✅");
+        };
+    }
+
+    // Reset Week Progress
+    const btnResetWeek = document.getElementById('btn-parent-reset-week');
+    if (btnResetWeek) {
+        btnResetWeek.onclick = () => {
+            if (confirm("Reset current week's practice logs and claim card status?")) {
+                const weekDays = getCurrentWeekDays();
+                weekDays.forEach(w => {
+                    delete rewardsData.daily_logs[w.dateStr];
+                });
+                const weekKey = getWeekKey();
+                delete rewardsData.weekly_history[weekKey];
+                saveRewardsData();
+                showToast("Reset week progress!", "🧹");
+            }
+        };
+    }
 }
 
 // Start app
