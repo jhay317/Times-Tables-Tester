@@ -22,6 +22,11 @@
 
         <!-- Top Navigation Controls -->
         <div class="top-nav-bar">
+            <button id="btn-user-profile" class="user-profile-btn" title="Explorer Profile & Switch User">
+                <span class="user-avatar-badge" id="nav-user-avatar">👤</span>
+                <span class="user-name-text" id="nav-user-name">Space Cadet (Guest)</span>
+                <span class="user-switch-badge">Switch / PIN 🔒</span>
+            </button>
             <button id="btn-open-rewards" class="rewards-widget-btn" title="Open Rewards & Mission Hub">
                 <span class="widget-icon">🎁</span>
                 <span class="widget-text">REWARDS & MISSION HUB</span>
@@ -404,6 +409,121 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AUTH & EXPLORER PROFILES MODAL -->
+        <div id="auth-modal" class="modal-backdrop">
+            <div class="modal-card glass-panel auth-card">
+                <div class="modal-header">
+                    <h2>🚀 Space Explorer Profiles</h2>
+                    <button id="btn-close-auth" class="modal-close-btn">&times;</button>
+                </div>
+
+                <div class="auth-tabs">
+                    <button class="auth-tab-btn active" data-tab="tab-switch-user">👥 Switch Explorer</button>
+                    <button class="auth-tab-btn" data-tab="tab-create-user">➕ New Explorer</button>
+                    <button class="auth-tab-btn" data-tab="tab-login-user">🔑 Sign In</button>
+                </div>
+
+                <div class="modal-content auth-content">
+                    <div id="auth-error-banner" class="auth-error-msg" style="display: none;"></div>
+
+                    <!-- TAB 1: SWITCH USER WITH 4-DIGIT PIN -->
+                    <div id="tab-switch-user" class="auth-tab-content active">
+                        <p class="auth-sub">Select your explorer card and enter your 4-digit PIN to jump into your universe!</p>
+                        
+                        <div id="profiles-grid" class="profiles-grid">
+                            <!-- Dynamic profile cards rendered here -->
+                        </div>
+
+                        <!-- Selected Profile PIN Prompt Section -->
+                        <div id="profile-pin-prompt-box" class="profile-pin-prompt-box" style="display: none;">
+                            <div class="selected-profile-header">
+                                <span id="pin-prompt-avatar" class="pin-avatar">🐶</span>
+                                <h4 id="pin-prompt-name">Explorer Name</h4>
+                                <span class="pin-prompt-sub">Enter your 4-digit PIN:</span>
+                            </div>
+                            <div class="pin-digits-wrapper">
+                                <input type="password" id="profile-pin-input" class="pin-box-input" maxlength="4" placeholder="••••" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                                <button id="btn-unlock-profile" class="btn-primary-sm">🚀 UNLOCK & BLAST OFF</button>
+                            </div>
+                            <button id="btn-cancel-pin-prompt" class="btn-text-sm">Cancel</button>
+                        </div>
+
+                        <div class="auth-footer-actions">
+                            <button id="btn-continue-guest" class="btn-outline-sm">🌌 Play as Space Guest (Unsaved)</button>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: CREATE NEW EXPLORER PROFILE -->
+                    <div id="tab-create-user" class="auth-tab-content">
+                        <p class="auth-sub">Create your custom Space Cadet profile with your unique 4-digit PIN to save stars and unlock gear!</p>
+                        <form id="create-profile-form" onsubmit="return false;">
+                            <div class="form-group">
+                                <label>Choose Your Co-Pilot Avatar:</label>
+                                <div class="auth-avatar-picker">
+                                    <label class="auth-avatar-item active">
+                                        <input type="radio" name="auth-reg-avatar" value="dog" checked>
+                                        <span class="avatar-icon">🐶</span>
+                                        <span class="avatar-label">Cosmo</span>
+                                    </label>
+                                    <label class="auth-avatar-item">
+                                        <input type="radio" name="auth-reg-avatar" value="cat">
+                                        <span class="avatar-icon">🐱</span>
+                                        <span class="avatar-label">Nova</span>
+                                    </label>
+                                    <label class="auth-avatar-item">
+                                        <input type="radio" name="auth-reg-avatar" value="robot">
+                                        <span class="avatar-icon">🤖</span>
+                                        <span class="avatar-label">Pip</span>
+                                    </label>
+                                    <label class="auth-avatar-item">
+                                        <input type="radio" name="auth-reg-avatar" value="fairy">
+                                        <span class="avatar-icon">🧚‍♀️</span>
+                                        <span class="avatar-label">Stella</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reg-display-name">Explorer Call Sign (Your Name):</label>
+                                <input type="text" id="reg-display-name" class="auth-text-input" placeholder="e.g. Alex" maxlength="20" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reg-username">Username (for logging in):</label>
+                                <input type="text" id="reg-username" class="auth-text-input" placeholder="e.g. alex2026" maxlength="20" required autocomplete="off">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="reg-pin">Secret 4-Digit PIN:</label>
+                                <input type="password" id="reg-pin" class="auth-text-input pin-input" placeholder="•••• (4 numbers)" maxlength="4" inputmode="numeric" pattern="[0-9]*" required autocomplete="off">
+                                <span class="input-hint">Kids: Remember your 4 numbers so only you can spend your stars!</span>
+                            </div>
+
+                            <button id="btn-submit-register" type="submit" class="btn-primary auth-submit-btn">✨ CREATE EXPLORER PROFILE</button>
+                        </form>
+                    </div>
+
+                    <!-- TAB 3: MANUAL SIGN IN -->
+                    <div id="tab-login-user" class="auth-tab-content">
+                        <p class="auth-sub">Already have an explorer call sign? Sign in with your username and 4-digit PIN.</p>
+                        <form id="login-profile-form" onsubmit="return false;">
+                            <div class="form-group">
+                                <label for="login-username">Explorer Username:</label>
+                                <input type="text" id="login-username" class="auth-text-input" placeholder="e.g. alex2026" maxlength="20" required autocomplete="username">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="login-pin">4-Digit PIN:</label>
+                                <input type="password" id="login-pin" class="auth-text-input pin-input" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" required autocomplete="current-password">
+                            </div>
+
+                            <button id="btn-submit-login" type="submit" class="btn-primary auth-submit-btn">🚀 SIGN IN TO MISSION</button>
+                        </form>
                     </div>
                 </div>
             </div>

@@ -1,57 +1,56 @@
-// Cloudflare Pages Function for /api/stats
-
-const COMMON_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-// Helper to get KV binding if available
-function getKV(env) {
-  return env.STATS_KV || env.STATS || null;
-}
+// Cloudflare Pages Function for /api/stats (Per-User Isolated)
+import {
+  COMMON_HEADERS,
+  jsonResponse,
+  optionsResponse,
+  getKV,
+  getAuthenticatedUser,
+} from './auth/_utils.js';
 
 // GET /api/stats
 export async function onRequestGet(context) {
-  const kv = getKV(context.env);
+  const { request, env } = context;
+  const user = await getAuthenticatedUser(request, env);
+  const kv = getKV(env);
+
+  // Isolate stats key per user ID or guest
+  const userKey = user ? `stats:${user.userId}` : 'stats:guest';
   let data = {};
 
   if (kv) {
     try {
-      const stored = await kv.get('user_stats', { type: 'json' });
+      const stored = await kv.get(userKey, { type: 'json' });
       if (stored) {
         data = stored;
       }
     } catch (e) {
-      console.error("Error reading stats from Cloudflare KV:", e);
+      console.error(`Error reading stats for ${userKey} from Cloudflare KV:`, e);
     }
   }
 
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: COMMON_HEADERS,
-  });
+  return jsonResponse(data);
 }
 
 // POST /api/stats
 export async function onRequestPost(context) {
   try {
-    const newData = await context.request.json();
-    const kv = getKV(context.env);
+    const { request, env } = context;
+    const user = await getAuthenticatedUser(request, env);
+    const newData = await request.json();
+    const kv = getKV(env);
+
+    // Isolate stats key per user ID or guest
+    const userKey = user ? `stats:${user.userId}` : 'stats:guest';
     
     let existingData = {};
     if (kv) {
       try {
-        const stored = await kv.get('user_stats', { type: 'json' });
+        const stored = await kv.get(userKey, { type: 'json' });
         if (stored) {
           existingData = stored;
         }
       } catch (e) {
-        console.error("Error fetching existing stats from KV:", e);
+        console.error(`Error fetching existing stats for ${userKey} from KV:`, e);
       }
     }
 
@@ -82,6 +81,11 @@ export async function onRequestPost(context) {
           const itemSet = new Set(rew.unlocked_items || []);
           newStats.unlocked_items.forEach(item => itemSet.add(item));
           rew.unlocked_items = Array.from(itemSet);
+        }
+
+        if (newStats.equipped_items && typeof newStats.equipped_items === 'object') {
+          if (!rew.equipped_items) rew.equipped_items = { hat: null, trail: null };
+          Object.assign(rew.equipped_items, newStats.equipped_items);
         }
 
         if (newStats.weekly_history && typeof newStats.weekly_history === 'object') {
@@ -125,28 +129,19 @@ export async function onRequestPost(context) {
     // Save updated stats back to KV if bound
     if (kv) {
       try {
-        await kv.put('user_stats', JSON.stringify(existingData));
+        await kv.put(userKey, JSON.stringify(existingData));
       } catch (e) {
-        console.error("Error saving updated stats to KV:", e);
+        console.error(`Error saving updated stats for ${userKey} to KV:`, e);
       }
     }
 
-    return new Response(JSON.stringify(existingData), {
-      status: 200,
-      headers: COMMON_HEADERS,
-    });
+    return jsonResponse(existingData);
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || "Invalid payload" }), {
-      status: 400,
-      headers: COMMON_HEADERS,
-    });
+    return jsonResponse({ error: err.message || "Invalid payload" }, 400);
   }
 }
 
 // OPTIONS /api/stats (CORS preflight)
 export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: COMMON_HEADERS,
-  });
+  return optionsResponse();
 }

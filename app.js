@@ -29,6 +29,11 @@ let rewardsData = {
 let dailyTimerInterval = null;
 let isParentUnlocked = false;
 
+// Authentication & User Profile State
+let currentUser = null; // { id, username, displayName, avatar }
+let authToken = null;
+let pendingSwitchUserId = null;
+
 // Avatars configuration
 const AVATARS = {
     dog: {
@@ -333,7 +338,9 @@ requestAnimationFrame(animateParticles);
 // --- Initialization & UI Binding ---
 
 async function initApp() {
+    loadStoredAuth();
     bindEvents();
+    bindAuthEvents();
     generatePlanetGrid();
     await fetchStats();
 }
@@ -480,22 +487,114 @@ function showScreen(screen) {
     screen.classList.add('active');
 }
 
+// --- Auth & Per-User Storage Helpers ---
+
+function getLocalStorageKey() {
+    return currentUser ? `math_galaxy_stats_${currentUser.id}` : 'math_galaxy_guest_stats';
+}
+
+function getAuthHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+    } else {
+        headers['X-User-Id'] = 'guest';
+    }
+    return headers;
+}
+
+function loadStoredAuth() {
+    try {
+        const storedToken = localStorage.getItem('math_galaxy_auth_token');
+        const storedUser = localStorage.getItem('math_galaxy_current_user');
+        if (storedToken && storedUser) {
+            authToken = storedToken;
+            currentUser = JSON.parse(storedUser);
+            if (currentUser && currentUser.avatar && AVATARS[currentUser.avatar]) {
+                selectedAvatar = currentUser.avatar;
+                document.querySelectorAll('.avatar-option').forEach(item => {
+                    item.classList.toggle('active', item.dataset.avatar === currentUser.avatar);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error restoring stored auth session:", e);
+    }
+    updateUserNavUI();
+}
+
+function updateUserNavUI() {
+    const avatarEl = document.getElementById('nav-user-avatar');
+    const nameEl = document.getElementById('nav-user-name');
+    if (!avatarEl || !nameEl) return;
+
+    if (currentUser) {
+        const emoji = AVATARS[currentUser.avatar]?.emoji || '🧑‍🚀';
+        avatarEl.innerText = emoji;
+        nameEl.innerText = currentUser.displayName || currentUser.username;
+    } else {
+        avatarEl.innerText = '👤';
+        nameEl.innerText = 'Space Cadet (Guest)';
+    }
+}
+
+function mergeRewardsData(existing, incoming) {
+    if (!incoming || typeof incoming !== 'object') return existing;
+    const res = {
+        bonus_stars: Math.max(existing.bonus_stars || 0, incoming.bonus_stars || 0),
+        unlocked_items: Array.from(new Set([...(existing.unlocked_items || []), ...(incoming.unlocked_items || [])])),
+        equipped_items: Object.assign({}, existing.equipped_items || { hat: null, trail: null }, incoming.equipped_items || {}),
+        daily_logs: Object.assign({}, existing.daily_logs || {}),
+        weekly_history: Object.assign({}, existing.weekly_history || {}, incoming.weekly_history || {}),
+        parent_settings: Object.assign({}, existing.parent_settings || { pin: "1234", custom_reward: "5 Skylight Calendar Bonus Stars" }, incoming.parent_settings || {})
+    };
+
+    if (incoming.daily_logs && typeof incoming.daily_logs === 'object') {
+        for (const [dateStr, logEntry] of Object.entries(incoming.daily_logs)) {
+            if (!res.daily_logs[dateStr]) {
+                res.daily_logs[dateStr] = Object.assign({}, logEntry);
+            } else {
+                const curr = res.daily_logs[dateStr];
+                curr.seconds_played = Math.max(curr.seconds_played || 0, logEntry.seconds_played || 0);
+                curr.goal_completed = (curr.goal_completed || false) || (logEntry.goal_completed || false);
+            }
+        }
+    }
+    return res;
+}
+
 // --- Fetch & Sync stats from API ---
 async function fetchStats() {
+    // Reset baseline state before loading
+    stats = {};
+    rewardsData = {
+        bonus_stars: 0,
+        unlocked_items: [],
+        equipped_items: { hat: null, trail: null },
+        daily_logs: {},
+        weekly_history: {},
+        parent_settings: { pin: "1234", custom_reward: "5 Skylight Calendar Bonus Stars" }
+    };
+
+    const storageKey = getLocalStorageKey();
+
     try {
-        const res = await fetch('/api/stats');
+        const res = await fetch('/api/stats', {
+            headers: getAuthHeaders()
+        });
         if (res.ok) {
             const data = await res.json();
-            stats = data;
+            stats = data || {};
             if (data.rewards_data) {
                 rewardsData = mergeRewardsData(rewardsData, data.rewards_data);
             }
+            localStorage.setItem(storageKey, JSON.stringify(stats));
         } else {
-            throw new Error();
+            throw new Error(`Status ${res.status}`);
         }
     } catch (e) {
         console.warn("Could not load statistics from server API, falling back to LocalStorage.");
-        const fallback = localStorage.getItem('math_galaxy_stats');
+        const fallback = localStorage.getItem(storageKey);
         if (fallback) {
             try {
                 const parsed = JSON.parse(fallback);
@@ -508,10 +607,14 @@ async function fetchStats() {
     }
     updateOverallStats();
     updateRewardsUI();
+    if (typeof renderCosmeticShop === 'function') {
+        renderCosmeticShop();
+    }
 }
 
 async function syncGameStats(table, success, elapsed) {
     const key = currentMode === 'multiplication' ? String(table) : `div_${table}`;
+    const storageKey = getLocalStorageKey();
     
     // Fallback local storage update
     if (!stats[key]) {
@@ -527,7 +630,7 @@ async function syncGameStats(table, success, elapsed) {
     } else {
         stats[key].failures += 1;
     }
-    localStorage.setItem('math_galaxy_stats', JSON.stringify(stats));
+    localStorage.setItem(storageKey, JSON.stringify(stats));
 
     // Save to the API
     try {
@@ -540,11 +643,16 @@ async function syncGameStats(table, success, elapsed) {
         };
         const res = await fetch('/api/stats', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload)
         });
         if (res.ok) {
-            stats = await res.json();
+            const returned = await res.json();
+            stats = returned;
+            if (returned.rewards_data) {
+                rewardsData = mergeRewardsData(rewardsData, returned.rewards_data);
+            }
+            localStorage.setItem(storageKey, JSON.stringify(stats));
         }
     } catch (e) {
         console.error("Failed to post stats to server api.", e);
@@ -1225,13 +1333,14 @@ function checkWeeklyCompletion() {
 }
 
 async function saveRewardsData() {
+    const storageKey = getLocalStorageKey();
     stats.rewards_data = rewardsData;
-    localStorage.setItem('math_galaxy_stats', JSON.stringify(stats));
+    localStorage.setItem(storageKey, JSON.stringify(stats));
 
     try {
         await fetch('/api/stats', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ rewards_data: rewardsData })
         });
     } catch (e) {
@@ -1567,5 +1676,402 @@ function bindRewardsEvents() {
     }
 }
 
+// ==========================================================================
+// Authentication & 4-Digit PIN Profile Management System
+// ==========================================================================
+
+function showAuthError(msg) {
+    const banner = document.getElementById('auth-error-banner');
+    if (!banner) return;
+    if (!msg) {
+        banner.style.display = 'none';
+        banner.innerText = '';
+    } else {
+        banner.innerText = msg;
+        banner.style.display = 'block';
+    }
+}
+
+function saveKnownProfileLocally(profile) {
+    if (!profile || !profile.id) return;
+    try {
+        let profiles = JSON.parse(localStorage.getItem('math_galaxy_known_profiles') || '[]');
+        profiles = profiles.filter(p => p.id !== profile.id && p.username !== profile.username);
+        profiles.push({
+            id: profile.id,
+            username: profile.username,
+            displayName: profile.displayName || profile.username,
+            avatar: profile.avatar || 'dog'
+        });
+        localStorage.setItem('math_galaxy_known_profiles', JSON.stringify(profiles));
+    } catch (e) {
+        console.warn("Could not cache profile locally:", e);
+    }
+}
+
+async function loadAndRenderProfiles() {
+    const container = document.getElementById('profiles-grid');
+    if (!container) return;
+
+    let profiles = [];
+
+    // Try fetching live profiles from server
+    try {
+        const res = await fetch('/api/auth/profiles');
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.profiles)) {
+                profiles = data.profiles;
+                profiles.forEach(saveKnownProfileLocally);
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch profiles from API, using locally cached profiles.");
+    }
+
+    // Merge with locally known profiles
+    try {
+        const local = JSON.parse(localStorage.getItem('math_galaxy_known_profiles') || '[]');
+        local.forEach(lp => {
+            if (!profiles.some(p => p.id === lp.id || p.username === lp.username)) {
+                profiles.push(lp);
+            }
+        });
+    } catch (e) {}
+
+    container.innerHTML = '';
+
+    if (profiles.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 24px 10px; background: rgba(255,255,255,0.04); border-radius: 12px;">
+                <span style="font-size: 2rem;">🧑‍🚀</span>
+                <p style="color: white; font-weight: 600; margin: 8px 0 4px 0;">No Explorer Profiles Found Yet</p>
+                <p style="font-size: 0.8rem; color: var(--color-text-dim); margin-bottom: 12px;">Create your profile in seconds to track stars, streak, and gear!</p>
+                <button type="button" class="btn-primary-sm" onclick="document.querySelector('[data-tab=tab-create-user]').click()">+ CREATE FIRST PROFILE</button>
+            </div>
+        `;
+        return;
+    }
+
+    profiles.forEach(p => {
+        const card = document.createElement('div');
+        const isActive = currentUser && (currentUser.id === p.id || currentUser.username === p.username);
+        card.className = `profile-card ${isActive ? 'active-user' : ''}`;
+        
+        const avatarEmoji = AVATARS[p.avatar]?.emoji || '🧑‍🚀';
+        const displayName = p.displayName || p.username;
+
+        card.innerHTML = `
+            <span class="profile-card-avatar">${avatarEmoji}</span>
+            <div class="profile-card-name" title="${displayName}">${displayName}</div>
+            <div class="profile-card-username">@${p.username}</div>
+            <span class="profile-card-tag">${isActive ? 'Active Now ⭐' : 'Enter PIN 🔒'}</span>
+        `;
+
+        card.addEventListener('click', () => {
+            handleSelectProfile(p);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+function handleSelectProfile(profile) {
+    pendingSwitchUserId = profile.id;
+    showAuthError('');
+
+    const promptBox = document.getElementById('profile-pin-prompt-box');
+    const avatarEl = document.getElementById('pin-prompt-avatar');
+    const nameEl = document.getElementById('pin-prompt-name');
+    const pinInput = document.getElementById('profile-pin-input');
+
+    if (avatarEl) avatarEl.innerText = AVATARS[profile.avatar]?.emoji || '🧑‍🚀';
+    if (nameEl) nameEl.innerText = profile.displayName || profile.username;
+    if (pinInput) {
+        pinInput.value = '';
+        setTimeout(() => pinInput.focus(), 50);
+    }
+
+    if (promptBox) promptBox.style.display = 'block';
+}
+
+async function handleUnlockProfile() {
+    const pinInput = document.getElementById('profile-pin-input');
+    if (!pinInput || !pendingSwitchUserId) return;
+
+    const pin = pinInput.value.trim();
+    if (!/^\d{4}$/.test(pin)) {
+        showAuthError('Please enter your 4-digit numeric PIN.');
+        playSound('incorrect');
+        pinInput.focus();
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: pendingSwitchUserId, pin })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            currentUser = data.user;
+            authToken = data.token;
+
+            localStorage.setItem('math_galaxy_auth_token', authToken);
+            localStorage.setItem('math_galaxy_current_user', JSON.stringify(currentUser));
+            saveKnownProfileLocally(currentUser);
+
+            updateUserNavUI();
+
+            if (currentUser.avatar && AVATARS[currentUser.avatar]) {
+                selectedAvatar = currentUser.avatar;
+                document.querySelectorAll('.avatar-option').forEach(item => {
+                    item.classList.toggle('active', item.dataset.avatar === currentUser.avatar);
+                });
+            }
+
+            document.getElementById('auth-modal').classList.remove('active');
+            document.getElementById('profile-pin-prompt-box').style.display = 'none';
+            pendingSwitchUserId = null;
+
+            playSound('victory');
+            showToast(`🚀 Welcome back, Captain ${currentUser.displayName}! All systems go!`, "🌟");
+
+            await fetchStats();
+        } else {
+            showAuthError(data.error || 'Incorrect 4-digit PIN. Please try again.');
+            playSound('incorrect');
+            pinInput.value = '';
+            pinInput.focus();
+        }
+    } catch (err) {
+        showAuthError('Could not reach authentication server. Please check connection.');
+        playSound('incorrect');
+    }
+}
+
+async function handleRegisterProfile() {
+    const displayName = document.getElementById('reg-display-name').value.trim();
+    const username = document.getElementById('reg-username').value.trim();
+    const pin = document.getElementById('reg-pin').value.trim();
+    const avatarInput = document.querySelector('input[name="auth-reg-avatar"]:checked');
+    const avatar = avatarInput ? avatarInput.value : 'dog';
+
+    if (!displayName) {
+        showAuthError('Please enter your explorer name.');
+        return;
+    }
+    if (username.length < 2) {
+        showAuthError('Username must be at least 2 characters.');
+        return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+        showAuthError('PIN must be exactly 4 numbers (e.g. 1234).');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, displayName, avatar, pin })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            currentUser = data.user;
+            authToken = data.token;
+
+            localStorage.setItem('math_galaxy_auth_token', authToken);
+            localStorage.setItem('math_galaxy_current_user', JSON.stringify(currentUser));
+            saveKnownProfileLocally(currentUser);
+
+            updateUserNavUI();
+
+            selectedAvatar = currentUser.avatar;
+            document.querySelectorAll('.avatar-option').forEach(item => {
+                item.classList.toggle('active', item.dataset.avatar === currentUser.avatar);
+            });
+
+            // Clear registration form
+            document.getElementById('reg-display-name').value = '';
+            document.getElementById('reg-username').value = '';
+            document.getElementById('reg-pin').value = '';
+
+            document.getElementById('auth-modal').classList.remove('active');
+            showAuthError('');
+
+            playSound('victory');
+            showToast(`🌟 Explorer profile created! Welcome aboard, Captain ${currentUser.displayName}! 🚀`, "✨");
+
+            await fetchStats();
+        } else {
+            showAuthError(data.error || 'Registration failed.');
+            playSound('incorrect');
+        }
+    } catch (err) {
+        showAuthError('Could not reach authentication server. Please check connection.');
+        playSound('incorrect');
+    }
+}
+
+async function handleLoginProfile() {
+    const username = document.getElementById('login-username').value.trim();
+    const pin = document.getElementById('login-pin').value.trim();
+
+    if (!username) {
+        showAuthError('Please enter your explorer username.');
+        return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+        showAuthError('PIN must be 4 digits.');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, pin })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            currentUser = data.user;
+            authToken = data.token;
+
+            localStorage.setItem('math_galaxy_auth_token', authToken);
+            localStorage.setItem('math_galaxy_current_user', JSON.stringify(currentUser));
+            saveKnownProfileLocally(currentUser);
+
+            updateUserNavUI();
+
+            if (currentUser.avatar && AVATARS[currentUser.avatar]) {
+                selectedAvatar = currentUser.avatar;
+                document.querySelectorAll('.avatar-option').forEach(item => {
+                    item.classList.toggle('active', item.dataset.avatar === currentUser.avatar);
+                });
+            }
+
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-pin').value = '';
+
+            document.getElementById('auth-modal').classList.remove('active');
+            showAuthError('');
+
+            playSound('victory');
+            showToast(`🚀 Welcome back, Captain ${currentUser.displayName}!`, "🌟");
+
+            await fetchStats();
+        } else {
+            showAuthError(data.error || 'Incorrect username or 4-digit PIN.');
+            playSound('incorrect');
+        }
+    } catch (err) {
+        showAuthError('Could not reach authentication server.');
+        playSound('incorrect');
+    }
+}
+
+async function handleGuestMode() {
+    currentUser = null;
+    authToken = null;
+    localStorage.removeItem('math_galaxy_auth_token');
+    localStorage.removeItem('math_galaxy_current_user');
+
+    updateUserNavUI();
+    document.getElementById('auth-modal').classList.remove('active');
+    document.getElementById('profile-pin-prompt-box').style.display = 'none';
+    pendingSwitchUserId = null;
+    showAuthError('');
+
+    showToast("🌌 Switched to Space Guest mode.", "🚀");
+    await fetchStats();
+}
+
+function bindAuthEvents() {
+    const btnUserNav = document.getElementById('btn-user-profile');
+    const btnCloseAuth = document.getElementById('btn-close-auth');
+    const authModal = document.getElementById('auth-modal');
+
+    // Open Auth modal
+    if (btnUserNav) {
+        btnUserNav.addEventListener('click', () => {
+            showAuthError('');
+            document.getElementById('profile-pin-prompt-box').style.display = 'none';
+            pendingSwitchUserId = null;
+            authModal.classList.add('active');
+            loadAndRenderProfiles();
+        });
+    }
+
+    // Close Auth modal
+    if (btnCloseAuth) {
+        btnCloseAuth.addEventListener('click', () => {
+            authModal.classList.remove('active');
+            document.getElementById('profile-pin-prompt-box').style.display = 'none';
+            pendingSwitchUserId = null;
+            showAuthError('');
+        });
+    }
+
+    // Auth modal tabs
+    document.querySelectorAll('.auth-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.auth-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.auth-tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+
+            const target = document.getElementById(btn.dataset.tab);
+            if (target) target.classList.add('active');
+
+            showAuthError('');
+            if (btn.dataset.tab === 'tab-switch-user') {
+                loadAndRenderProfiles();
+            }
+        });
+    });
+
+    // Unlock PIN prompt buttons
+    const btnUnlock = document.getElementById('btn-unlock-profile');
+    const btnCancelPrompt = document.getElementById('btn-cancel-pin-prompt');
+    const profilePinInput = document.getElementById('profile-pin-input');
+
+    if (btnUnlock) {
+        btnUnlock.addEventListener('click', handleUnlockProfile);
+    }
+    if (profilePinInput) {
+        profilePinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleUnlockProfile();
+        });
+    }
+    if (btnCancelPrompt) {
+        btnCancelPrompt.addEventListener('click', () => {
+            document.getElementById('profile-pin-prompt-box').style.display = 'none';
+            pendingSwitchUserId = null;
+            showAuthError('');
+        });
+    }
+
+    // Form submissions
+    const btnRegSubmit = document.getElementById('btn-submit-register');
+    if (btnRegSubmit) {
+        btnRegSubmit.addEventListener('click', handleRegisterProfile);
+    }
+
+    const btnLoginSubmit = document.getElementById('btn-submit-login');
+    if (btnLoginSubmit) {
+        btnLoginSubmit.addEventListener('click', handleLoginProfile);
+    }
+
+    const btnGuest = document.getElementById('btn-continue-guest');
+    if (btnGuest) {
+        btnGuest.addEventListener('click', handleGuestMode);
+    }
+}
+
 // Start app
 window.addEventListener('DOMContentLoaded', initApp);
+

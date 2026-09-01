@@ -116,9 +116,19 @@ To package and run the web game inside a lightweight Docker container:
 
 ## ⚡ Cloudflare Pages Deployment
 
-This project is fully ready to deploy to **Cloudflare Pages** with Cloudflare Functions handling the `/api/stats` endpoint.
+This project is fully ready to deploy to **Cloudflare Pages** with Cloudflare Pages Functions providing full multi-user authentication and per-user rewards persistence.
 
-### 1. Local Development with Wrangler
+### 1. User Authentication & 4-Digit PIN Security
+- **Multi-User Profiles**: Multiple kids or students can share the same tablet, laptop, or browser with isolated stars, streaks, daily 5-minute mission logs, cosmetic gear, and Skylight Chore Claim Cards.
+- **4-Digit PIN Protection**: Switching between profiles or signing in requires each child's 4-digit PIN, preventing siblings from altering each other's stars or rewards.
+- **API Endpoints**:
+  - `POST /api/auth/register`: Create a new kid profile with username, display name, avatar, and 4-digit PIN.
+  - `POST /api/auth/login`: Authenticate with 4-digit PIN and receive signed JWT session token.
+  - `GET /api/auth/me`: Get active authenticated user profile.
+  - `GET /api/auth/profiles`: Public profile directory for 1-click switcher cards.
+  - `GET /api/stats` & `POST /api/stats`: User-isolated stats and rewards persistence.
+
+### 2. Local Development with Wrangler
 Preview the web application and Cloudflare Pages Functions locally using Cloudflare Wrangler:
 
 ```bash
@@ -129,7 +139,7 @@ Or using npm:
 npm run dev
 ```
 
-### 2. Deploy to Cloudflare Pages
+### 3. Deploy to Cloudflare Pages
 Deploy directly from your command line:
 
 ```bash
@@ -142,12 +152,13 @@ npm run deploy
 
 Alternatively, connect your Git repository (GitHub / GitLab) in the [Cloudflare Dashboard](https://dash.cloudflare.com/), select **Cloudflare Pages**, set the build output directory to `/` (or `.`), and leave the build command blank.
 
-### 3. Optional: Persistent Cloud Storage with Workers KV
-By default, player statistics fall back gracefully to `localStorage` in the browser. To persist statistics across devices and users using Cloudflare's global edge network:
+### 4. Persistent Cloud Storage with Workers KV
+To persist statistics and accounts across devices using Cloudflare's global edge network:
 1. Create a KV Namespace in the Cloudflare Dashboard under **Workers & Pages > KV**.
 2. Name the KV namespace (e.g. `STATS_KV`).
 3. Bind the KV namespace to your Pages project in **Settings > Functions > KV namespace bindings** with the Variable name `STATS_KV`.
-4. (Optional) For Wrangler deployments, uncomment the `[[kv_namespaces]]` block in `wrangler.toml` with your KV namespace ID.
+4. (Optional) In **Settings > Environment Variables**, add an `AUTH_SECRET` variable for custom token signing.
+5. (Optional) For Wrangler deployments, uncomment the `[[kv_namespaces]]` block in `wrangler.toml` with your KV namespace ID.
 
 ---
 

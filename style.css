@@ -1636,9 +1636,390 @@ button:active {
     .top-nav-bar {
         top: 10px;
         right: 10px;
+        gap: 6px;
     }
     .rewards-widget-btn .widget-text {
         display: none;
     }
+    .user-profile-btn .user-switch-badge {
+        display: none;
+    }
 }
+
+/* ==========================================================================
+   User Profile Navigation & 4-Digit PIN Authentication System
+   ========================================================================== */
+
+/* User Profile Button in Top Nav */
+.user-profile-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    backdrop-filter: blur(12px);
+    border-radius: 9999px;
+    padding: 6px 14px 6px 10px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.user-profile-btn:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-accent-cyan);
+    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.35);
+    background: rgba(30, 41, 59, 0.85);
+}
+
+.user-avatar-badge {
+    font-size: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.user-name-text {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #f1f5f9;
+    letter-spacing: 0.5px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-switch-badge {
+    font-size: 0.68rem;
+    background: rgba(147, 51, 234, 0.35);
+    border: 1px solid rgba(192, 132, 252, 0.4);
+    padding: 2px 6px;
+    border-radius: 10px;
+    color: #e9d5ff;
+    font-weight: 600;
+}
+
+/* Auth Modal Styles */
+.auth-card {
+    max-width: 520px;
+    width: 92%;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 20px 0 20px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.auth-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--color-text-dim);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.auth-tab-btn:hover {
+    color: white;
+}
+
+.auth-tab-btn.active {
+    color: var(--color-accent-cyan);
+    border-bottom-color: var(--color-accent-cyan);
+}
+
+.auth-content {
+    padding: 20px;
+}
+
+.auth-sub {
+    font-size: 0.85rem;
+    color: var(--color-text-dim);
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.auth-error-msg {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--color-danger);
+    color: #fca5a5;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+}
+
+/* Profiles Grid for Switcher */
+.profiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.profile-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.profile-card:hover {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: var(--color-accent-cyan);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(56, 189, 248, 0.2);
+}
+
+.profile-card.active-user {
+    border-color: var(--color-success);
+    background: rgba(34, 197, 94, 0.15);
+}
+
+.profile-card-avatar {
+    font-size: 2.2rem;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.profile-card-name {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: white;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-card-username {
+    font-size: 0.72rem;
+    color: var(--color-text-dim);
+    margin-bottom: 4px;
+}
+
+.profile-card-tag {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #38bdf8;
+    display: inline-block;
+}
+
+/* PIN Prompt Box */
+.profile-pin-prompt-box {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--color-accent-purple);
+    border-radius: 16px;
+    padding: 18px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.selected-profile-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 14px;
+}
+
+.pin-avatar {
+    font-size: 2.5rem;
+}
+
+.selected-profile-header h4 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    color: white;
+    margin: 0;
+}
+
+.pin-prompt-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-dim);
+}
+
+.pin-digits-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.pin-box-input {
+    width: 140px;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid var(--color-accent-cyan);
+    border-radius: 12px;
+    color: white;
+    font-size: 1.5rem;
+    text-align: center;
+    letter-spacing: 12px;
+    font-family: monospace;
+    font-weight: 700;
+}
+
+.pin-box-input:focus {
+    outline: none;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+}
+
+/* Form Styles */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.form-group label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.auth-text-input {
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: white;
+    font-size: 0.95rem;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s ease;
+}
+
+.auth-text-input:focus {
+    border-color: var(--color-accent-cyan);
+    outline: none;
+}
+
+.auth-text-input.pin-input {
+    letter-spacing: 6px;
+    font-family: monospace;
+    font-size: 1.1rem;
+}
+
+.input-hint {
+    font-size: 0.72rem;
+    color: var(--color-text-dim);
+}
+
+.auth-avatar-picker {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.auth-avatar-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 8px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.auth-avatar-item input[type="radio"] {
+    display: none;
+}
+
+.auth-avatar-item .avatar-icon {
+    font-size: 1.6rem;
+}
+
+.auth-avatar-item .avatar-label {
+    font-size: 0.72rem;
+    color: var(--color-text-dim);
+    font-weight: 600;
+}
+
+.auth-avatar-item.active,
+.auth-avatar-item:has(input[type="radio"]:checked) {
+    background: rgba(147, 51, 234, 0.25);
+    border-color: var(--color-accent-purple);
+}
+
+.auth-avatar-item.active .avatar-label,
+.auth-avatar-item:has(input[type="radio"]:checked) .avatar-label {
+    color: white;
+}
+
+.auth-submit-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+    font-size: 0.95rem;
+    border-radius: 12px;
+}
+
+.auth-footer-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-outline-sm {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: var(--color-text-dim);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-outline-sm:hover {
+    color: white;
+    border-color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-text-sm {
+    background: transparent;
+    border: none;
+    color: var(--color-text-dim);
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-top: 6px;
+}
+
+.btn-text-sm:hover {
+    color: white;
+}
+
 
