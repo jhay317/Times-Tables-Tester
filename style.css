@@ -1748,6 +1748,14 @@ button:active {
     padding: 20px;
 }
 
+.auth-tab-content {
+    display: none;
+}
+
+.auth-tab-content.active {
+    display: block;
+}
+
 .auth-sub {
     font-size: 0.85rem;
     color: var(--color-text-dim);

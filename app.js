@@ -2017,6 +2017,17 @@ function bindAuthEvents() {
         });
     }
 
+    if (authModal) {
+        authModal.addEventListener('click', (e) => {
+            if (e.target === authModal) {
+                authModal.classList.remove('active');
+                document.getElementById('profile-pin-prompt-box').style.display = 'none';
+                pendingSwitchUserId = null;
+                showAuthError('');
+            }
+        });
+    }
+
     // Auth modal tabs
     document.querySelectorAll('.auth-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
